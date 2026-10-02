@@ -1,18 +1,22 @@
 import os
 import sys
 import json
+import time
 import datetime
+import threading
 import subprocess
 import urllib.request
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
 from fpdf import FPDF
+
+# Fijar el directorio de trabajo en la raíz del ejecutable si está congelado
 if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
+
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.9"
-# Reemplaza con la URL RAW de tu repositorio en GitHub
+VERSION_ACTUAL = "1.1.0"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -71,23 +75,155 @@ def guardar_json(ruta, datos):
 
 
 # --- LÓGICA DE AUTO-ACTUALIZACIÓN ---
-import time
-
 def parse_version(v_str):
-    """Convierte '1.0.2' en una tupla de enteros (1, 0, 2) para comparar números y no texto."""
     try:
-        # Limpia posibles 'v' al inicio como 'v1.0.2'
         limpio = v_str.strip().lstrip('v')
         return tuple(int(x) for x in limpio.split('.'))
     except Exception:
         return (0, 0, 0)
 
-def comprobar_actualizacion(parent=None):
+class VentanaDescarga(ctk.CTkToplevel):
+    def __init__(self, master, url_descarga):
+        super().__init__(master)
+        self.master = master
+        self.url_descarga = url_descarga
+        
+        self.title("Descargando actualización")
+        self.geometry("420x180")
+        self.resizable(False, False)
+        self.grab_set()
+
+        self.update_idletasks()
+        x = master.winfo_x() + (master.winfo_width() // 2) - 210
+        y = master.winfo_y() + (master.winfo_height() // 2) - 90
+        self.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+        self.lbl_estado = ctk.CTkLabel(
+            self, 
+            text="Conectando con el servidor...", 
+            font=("Helvetica", 13, "bold")
+        )
+        self.lbl_estado.pack(pady=(20, 10))
+
+        self.progress_bar = ctk.CTkProgressBar(self, width=340)
+        self.progress_bar.set(0)
+        self.progress_bar.pack(pady=10)
+
+        self.lbl_detalles = ctk.CTkLabel(
+            self, 
+            text="0.00 MB / 0.00 MB (0%)", 
+            font=("Helvetica", 11)
+        )
+        self.lbl_detalles.pack(pady=(0, 15))
+
+        self.protocol("WM_DELETE_WINDOW", lambda: None)
+        threading.Thread(target=self._descargar_hilo, daemon=True).start()
+
+    def _descargar_hilo(self):
+        ruta_exe_actual = sys.executable
+        directorio_app = os.path.dirname(ruta_exe_actual)
+        nombre_exe = os.path.basename(ruta_exe_actual)
+        ruta_exe_nuevo = os.path.join(directorio_app, "facturador2026_update.tmp")
+        ruta_bat = os.path.join(directorio_app, "updater.bat")
+
+        try:
+            req = urllib.request.Request(
+                self.url_descarga,
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+            )
+
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                total_bytes = resp.getheader('Content-Length')
+                total_bytes = int(total_bytes) if total_bytes else None
+
+                descargados = 0
+                bloque_size = 1024 * 64
+                
+                with open(ruta_exe_nuevo, 'wb') as f_out:
+                    while True:
+                        chunk = resp.read(bloque_size)
+                        if not chunk:
+                            break
+                        f_out.write(chunk)
+                        descargados += len(chunk)
+
+                        if total_bytes:
+                            porcentaje = descargados / total_bytes
+                            mb_actual = descargados / (1024 * 1024)
+                            mb_total = total_bytes / (1024 * 1024)
+                            texto_progreso = f"{mb_actual:.2f} MB / {mb_total:.2f} MB ({int(porcentaje * 100)}%)"
+                            self.after(0, self._actualizar_ui, porcentaje, texto_progreso)
+                        else:
+                            mb_actual = descargados / (1024 * 1024)
+                            self.after(0, self._actualizar_ui_indeterminada, f"{mb_actual:.2f} MB descargados")
+
+            tamano_mb = os.path.getsize(ruta_exe_nuevo) / (1024 * 1024)
+            if tamano_mb < 5.0:
+                raise ValueError(f"Archivo incompleto ({tamano_mb:.2f} MB).")
+
+            self.after(0, lambda: self.lbl_estado.configure(text="¡Descarga completada! Reiniciando..."))
+            
+            script_bat = f"""@echo off
+setlocal enabledelayedexpansion
+
+taskkill /f /im "{nombre_exe}" > nul 2>&1
+timeout /t 2 /nobreak > nul
+
+:retry
+move /y "{ruta_exe_nuevo}" "{ruta_exe_actual}" > nul 2>&1
+if exist "{ruta_exe_nuevo}" (
+    timeout /t 1 /nobreak > nul
+    goto retry
+)
+
+timeout /t 1 /nobreak > nul
+cd /d "{directorio_app}"
+start "" "{ruta_exe_actual}"
+del "%~f0"
+"""
+            with open(ruta_bat, "w", encoding="utf-8") as f:
+                f.write(script_bat)
+
+            flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            subprocess.Popen(["cmd.exe", "/c", ruta_bat], creationflags=flags)
+            sys.exit(0)
+
+        except Exception as e:
+            if os.path.exists(ruta_exe_nuevo):
+                try:
+                    os.remove(ruta_exe_nuevo)
+                except Exception:
+                    pass
+            self.after(0, self._mostrar_error, str(e))
+
+    def _actualizar_ui(self, porcentaje, texto):
+        self.progress_bar.set(porcentaje)
+        self.lbl_estado.configure(text="Descargando actualización...")
+        self.lbl_detalles.configure(text=texto)
+
+    def _actualizar_ui_indeterminada(self, texto):
+        self.lbl_estado.configure(text="Descargando actualización...")
+        self.lbl_detalles.configure(text=texto)
+
+    def _mostrar_error(self, error_msg):
+        self.destroy()
+        messagebox.showerror(
+            "Fallo al actualizar", 
+            f"No se pudo completar la descarga:\n{error_msg}", 
+            parent=self.master
+        )
+
+def comprobar_actualizacion(parent=None, manual=False):
     if not getattr(sys, 'frozen', False):
+        if manual:
+            messagebox.showinfo(
+                "Modo desarrollo", 
+                "Estás ejecutando el script .py. Las actualizaciones funcionan en el .exe compilado.",
+                parent=parent
+            )
         return
 
     try:
-        # Añadir timestamp (?nocache=...) para evitar que GitHub entregue una versión cacheada
         url_con_cache_bust = f"{URL_VERSION_REMOTA}?nocache={int(time.time())}"
         
         req = urllib.request.Request(
@@ -104,7 +240,6 @@ def comprobar_actualizacion(parent=None):
             version_remota = data.get("version", "").strip()
             url_descarga = data.get("url")
 
-        # Comparar tuplas numéricas: (1, 0, 2) > (1, 0, 1)
         if version_remota and parse_version(version_remota) > parse_version(VERSION_ACTUAL):
             resp = messagebox.askyesno(
                 "Actualización disponible",
@@ -114,10 +249,24 @@ def comprobar_actualizacion(parent=None):
                 parent=parent
             )
             if resp:
-                ejecutar_actualizacion(url_descarga, parent)
+                VentanaDescarga(parent, url_descarga)
+        else:
+            if manual:
+                messagebox.showinfo(
+                    "Sin actualizaciones",
+                    f"Ya tienes la versión más reciente (v{VERSION_ACTUAL}).",
+                    parent=parent
+                )
 
-    except Exception:
-        pass
+    except Exception as e:
+        if manual:
+            messagebox.showerror(
+                "Error de conexión",
+                f"No se pudo comprobar el estado de actualización:\n{e}",
+                parent=parent
+            )
+
+
 # --- GENERADOR DE PDF ---
 class TicketPDF(FPDF):
     def __init__(self):
@@ -473,8 +622,8 @@ class FacturadorApp(ctk.CTk):
         self.items_factura = []
         self.crear_interfaz()
 
-        # Comprobar actualizaciones en segundo plano 1s después del arranque
-        self.after(1000, lambda: comprobar_actualizacion(parent=self))
+        # Comprobar actualizaciones silenciosamente al inicio
+        self.after(1000, lambda: comprobar_actualizacion(parent=self, manual=False))
 
     def get_num_factura(self):
         return f"{self.config_data['anio']}/{(self.config_data['ultimo_num'] + 1):03d}"
@@ -543,6 +692,18 @@ class FacturadorApp(ctk.CTk):
         btn_add = ctk.CTkButton(left_panel, text="+ Añadir a Lista", command=self.agregar_item, fg_color="#2b7a78", hover_color="#17252a")
         btn_add.pack(padx=15, pady=10, fill="x")
 
+        # Botón para forzar comprobación manual de actualización
+        self.btn_check_update = ctk.CTkButton(
+            left_panel,
+            text="🔄 Buscar actualizaciones",
+            font=("Helvetica", 11),
+            fg_color="gray30",
+            hover_color="gray20",
+            height=28,
+            command=lambda: comprobar_actualizacion(parent=self, manual=True)
+        )
+        self.btn_check_update.pack(side="bottom", padx=15, pady=(0, 15), fill="x")
+
         # Botón PDF Principal
         self.btn_pdf = ctk.CTkButton(
             left_panel, 
@@ -553,7 +714,7 @@ class FacturadorApp(ctk.CTk):
             fg_color="#2e7d32", 
             hover_color="#1b5e20"
         )
-        self.btn_pdf.pack(side="bottom", padx=15, pady=15, fill="x")
+        self.btn_pdf.pack(side="bottom", padx=15, pady=(10, 5), fill="x")
 
         # Panel Derecho
         right_panel = ctk.CTkFrame(self, corner_radius=10)

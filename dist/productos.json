@@ -1,0 +1,12 @@
+[
+    {
+        "desc": "Consultoría Técnica (hora)",
+        "precio": 75.0,
+        "iva": 21
+    },
+    {
+        "desc": "Libros y Revistas",
+        "precio": 10.0,
+        "iva": 4
+    }
+]
