@@ -10,7 +10,7 @@ import customtkinter as ctk
 from fpdf import FPDF
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.3"
+VERSION_ACTUAL = "1.0.4"
 # Reemplaza con la URL RAW de tu repositorio en GitHub
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
