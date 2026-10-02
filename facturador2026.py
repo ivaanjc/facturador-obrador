@@ -8,9 +8,10 @@ import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
 from fpdf import FPDF
-
+if getattr(sys, 'frozen', False):
+    os.chdir(os.path.dirname(sys.executable))
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.5"
+VERSION_ACTUAL = "1.0.6"
 # Reemplaza con la URL RAW de tu repositorio en GitHub
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
