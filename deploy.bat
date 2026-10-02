@@ -2,7 +2,11 @@
 set /p VERSION="Introduce la nueva version (ej. 1.0.1): "
 
 echo [1/4] Compilando con PyInstaller...
-pyinstaller --noconsole --onefile --clean app.py
+pyinstaller --noconsole --onefile --clean ^
+    --add-data "logo.png;." ^
+    --collect-all customtkinter ^
+    facturador2026.py
+
 if errorlevel 1 (
     echo Error durante la compilacion.
     exit /b %errorlevel%
@@ -11,8 +15,8 @@ if errorlevel 1 (
 echo [2/4] Actualizando version.json...
 (
 echo {
-echo   "version": "%VERSION%",
-echo   "url": "https://github.com/ivaanjc/facturador-obrador/releases/download/v%VERSION%/facturador2026.exe"
+echo    "version": "%VERSION%",
+echo    "url": "https://github.com/ivaanjc/facturador-obrador/releases/download/v%VERSION%/facturador2026.exe"
 echo }
 ) > version.json
 
