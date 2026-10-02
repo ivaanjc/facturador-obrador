@@ -11,7 +11,7 @@ from fpdf import FPDF
 if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.8"
+VERSION_ACTUAL = "1.0.9"
 # Reemplaza con la URL RAW de tu repositorio en GitHub
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
