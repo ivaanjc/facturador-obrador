@@ -10,7 +10,7 @@ import customtkinter as ctk
 from fpdf import FPDF
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.4"
+VERSION_ACTUAL = "1.0.5"
 # Reemplaza con la URL RAW de tu repositorio en GitHub
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
@@ -99,49 +99,63 @@ def comprobar_actualizacion(parent=None):
         pass
 
 def ejecutar_actualizacion(url_descarga, parent=None):
-    try:
-        ruta_exe_actual = sys.executable
-        directorio_app = os.path.dirname(ruta_exe_actual)
-        ruta_exe_nuevo = os.path.join(directorio_app, "facturador2026_update.tmp")
-        ruta_bat = os.path.join(directorio_app, "updater.bat")
+    ruta_exe_actual = sys.executable
+    directorio_app = os.path.dirname(ruta_exe_actual)
+    ruta_exe_nuevo = os.path.join(directorio_app, "facturador2026_update.tmp")
+    ruta_bat = os.path.join(directorio_app, "updater.bat")
+    nombre_exe = os.path.basename(ruta_exe_actual)
 
-        # 1. Descarga robusta siguiendo redirecciones con User-Agent válido
+    try:
+        # 1. Descarga del binario en bloques con User-Agent
         req = urllib.request.Request(
             url_descarga,
             headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         )
-        
         with urllib.request.urlopen(req, timeout=30) as resp, open(ruta_exe_nuevo, 'wb') as f_out:
             while True:
-                chunk = resp.read(1024 * 64) # Bloques de 64KB
+                chunk = resp.read(1024 * 64)  # 64 KB
                 if not chunk:
                     break
                 f_out.write(chunk)
 
-        # 2. Control de integridad: Comprobar que el archivo pese más de 5 MB
+        # 2. Control de integridad básico (comprobar que no esté truncado)
         tamano_mb = os.path.getsize(ruta_exe_nuevo) / (1024 * 1024)
         if tamano_mb < 5.0:
-            raise ValueError(f"El archivo descargado está corrupto o incompleto ({tamano_mb:.2f} MB).")
+            raise ValueError(f"Descarga incompleta o corrupta ({tamano_mb:.2f} MB).")
 
-        # 3. Script BAT con esperas y verificación de desbloqueo del proceso previo
+        # 3. Script BAT: Mata el proceso viejo, asegura el reemplazo y reinicia
         script_bat = f"""@echo off
-timeout /t 3 /nobreak > nul
+setlocal enabledelayedexpansion
+
+:: Forzar cierre de cualquier instancia residual para liberar python3x.dll y temporales
+taskkill /f /im "{nombre_exe}" > nul 2>&1
+timeout /t 2 /nobreak > nul
+
+:: Bucle de reemplazo asegurando que el archivo temporal ya no exista
 :retry
 move /y "{ruta_exe_nuevo}" "{ruta_exe_actual}" > nul 2>&1
 if exist "{ruta_exe_nuevo}" (
     timeout /t 1 /nobreak > nul
     goto retry
 )
+
+:: Breve respiro para que el kernel de Windows libere los descriptores
+timeout /t 1 /nobreak > nul
+
+:: Iniciar el ejecutable actualizado con su carpeta como directorio de trabajo
+cd /d "{directorio_app}"
 start "" "{ruta_exe_actual}"
+
+:: Autoeliminación del instalador temporal
 del "%~f0"
 """
         with open(ruta_bat, "w", encoding="utf-8") as f:
             f.write(script_bat)
 
-        # 4. Lanzar el updater y salir
+        # 4. Lanzar updater en segundo plano desacoplado y cerrar proceso actual
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         subprocess.Popen(["cmd.exe", "/c", ruta_bat], creationflags=flags)
-        
+
         sys.exit(0)
 
     except Exception as e:
@@ -150,8 +164,11 @@ del "%~f0"
                 os.remove(ruta_exe_nuevo)
             except Exception:
                 pass
-        messagebox.showerror("Error al actualizar", f"Fallo al descargar la actualización:\n{e}", parent=parent)
-
+        messagebox.showerror(
+            "Error al actualizar",
+            f"Fallo al descargar o preparar la actualización:\n{e}",
+            parent=parent
+        )
 # --- GENERADOR DE PDF ---
 class TicketPDF(FPDF):
     def __init__(self):
