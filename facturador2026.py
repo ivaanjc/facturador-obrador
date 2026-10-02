@@ -10,7 +10,7 @@ import customtkinter as ctk
 from fpdf import FPDF
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.1"
+VERSION_ACTUAL = "1.0.3"
 # Reemplaza con la URL RAW de tu repositorio en GitHub
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
@@ -102,15 +102,30 @@ def ejecutar_actualizacion(url_descarga, parent=None):
     try:
         ruta_exe_actual = sys.executable
         directorio_app = os.path.dirname(ruta_exe_actual)
-        ruta_exe_nuevo = os.path.join(directorio_app, "Facturador_update.tmp")
+        ruta_exe_nuevo = os.path.join(directorio_app, "facturador2026_update.tmp")
         ruta_bat = os.path.join(directorio_app, "updater.bat")
 
-        # Descarga del nuevo ejecutable
-        urllib.request.urlretrieve(url_descarga, ruta_exe_nuevo)
+        # 1. Descarga robusta siguiendo redirecciones con User-Agent válido
+        req = urllib.request.Request(
+            url_descarga,
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        )
+        
+        with urllib.request.urlopen(req, timeout=30) as resp, open(ruta_exe_nuevo, 'wb') as f_out:
+            while True:
+                chunk = resp.read(1024 * 64) # Bloques de 64KB
+                if not chunk:
+                    break
+                f_out.write(chunk)
 
-        # Generar script .bat para desacoplar el proceso y reemplazar el binario
+        # 2. Control de integridad: Comprobar que el archivo pese más de 5 MB
+        tamano_mb = os.path.getsize(ruta_exe_nuevo) / (1024 * 1024)
+        if tamano_mb < 5.0:
+            raise ValueError(f"El archivo descargado está corrupto o incompleto ({tamano_mb:.2f} MB).")
+
+        # 3. Script BAT con esperas y verificación de desbloqueo del proceso previo
         script_bat = f"""@echo off
-timeout /t 2 /nobreak > nul
+timeout /t 3 /nobreak > nul
 :retry
 move /y "{ruta_exe_nuevo}" "{ruta_exe_actual}" > nul 2>&1
 if exist "{ruta_exe_nuevo}" (
@@ -120,17 +135,22 @@ if exist "{ruta_exe_nuevo}" (
 start "" "{ruta_exe_actual}"
 del "%~f0"
 """
-        with open(ruta_bat, "w") as f:
+        with open(ruta_bat, "w", encoding="utf-8") as f:
             f.write(script_bat)
 
-        # Lanzar proceso independiente en segundo plano
+        # 4. Lanzar el updater y salir
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         subprocess.Popen(["cmd.exe", "/c", ruta_bat], creationflags=flags)
         
         sys.exit(0)
-    except Exception as e:
-        messagebox.showerror("Error al actualizar", f"No se pudo completar la actualización: {e}", parent=parent)
 
+    except Exception as e:
+        if os.path.exists(ruta_exe_nuevo):
+            try:
+                os.remove(ruta_exe_nuevo)
+            except Exception:
+                pass
+        messagebox.showerror("Error al actualizar", f"Fallo al descargar la actualización:\n{e}", parent=parent)
 
 # --- GENERADOR DE PDF ---
 class TicketPDF(FPDF):
