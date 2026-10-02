@@ -11,7 +11,7 @@ from fpdf import FPDF
 if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.7"
+VERSION_ACTUAL = "1.0.8"
 # Reemplaza con la URL RAW de tu repositorio en GitHub
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
@@ -71,105 +71,53 @@ def guardar_json(ruta, datos):
 
 
 # --- LÓGICA DE AUTO-ACTUALIZACIÓN ---
+import time
+
+def parse_version(v_str):
+    """Convierte '1.0.2' en una tupla de enteros (1, 0, 2) para comparar números y no texto."""
+    try:
+        # Limpia posibles 'v' al inicio como 'v1.0.2'
+        limpio = v_str.strip().lstrip('v')
+        return tuple(int(x) for x in limpio.split('.'))
+    except Exception:
+        return (0, 0, 0)
+
 def comprobar_actualizacion(parent=None):
     if not getattr(sys, 'frozen', False):
         return
 
     try:
+        # Añadir timestamp (?nocache=...) para evitar que GitHub entregue una versión cacheada
+        url_con_cache_bust = f"{URL_VERSION_REMOTA}?nocache={int(time.time())}"
+        
         req = urllib.request.Request(
-            URL_VERSION_REMOTA, 
-            headers={'User-Agent': 'FacturadorBelisUpdater'}
+            url_con_cache_bust,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
         )
-        with urllib.request.urlopen(req, timeout=4) as response:
+
+        with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode('utf-8'))
-            version_remota = data.get("version")
+            version_remota = data.get("version", "").strip()
             url_descarga = data.get("url")
 
-        if version_remota and version_remota > VERSION_ACTUAL:
+        # Comparar tuplas numéricas: (1, 0, 2) > (1, 0, 1)
+        if version_remota and parse_version(version_remota) > parse_version(VERSION_ACTUAL):
             resp = messagebox.askyesno(
                 "Actualización disponible",
                 f"Hay una nueva versión disponible ({version_remota}).\n"
                 f"Versión actual: {VERSION_ACTUAL}\n\n"
-                "¿Deseas descargar la actualización y reiniciar la aplicación ahora?",
+                "¿Deseas descargar la actualización ahora?",
                 parent=parent
             )
             if resp:
                 ejecutar_actualizacion(url_descarga, parent)
+
     except Exception:
-        # Falla de red, timeout o URL no configurada todavía; se ignora en silencio
         pass
-
-def ejecutar_actualizacion(url_descarga, parent=None):
-    ruta_exe_actual = sys.executable
-    directorio_app = os.path.dirname(ruta_exe_actual)
-    ruta_exe_nuevo = os.path.join(directorio_app, "facturador2026_update.tmp")
-    ruta_bat = os.path.join(directorio_app, "updater.bat")
-    nombre_exe = os.path.basename(ruta_exe_actual)
-
-    try:
-        # 1. Descarga del binario en bloques con User-Agent
-        req = urllib.request.Request(
-            url_descarga,
-            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp, open(ruta_exe_nuevo, 'wb') as f_out:
-            while True:
-                chunk = resp.read(1024 * 64)  # 64 KB
-                if not chunk:
-                    break
-                f_out.write(chunk)
-
-        # 2. Control de integridad básico (comprobar que no esté truncado)
-        tamano_mb = os.path.getsize(ruta_exe_nuevo) / (1024 * 1024)
-        if tamano_mb < 5.0:
-            raise ValueError(f"Descarga incompleta o corrupta ({tamano_mb:.2f} MB).")
-
-        # 3. Script BAT: Mata el proceso viejo, asegura el reemplazo y reinicia
-        script_bat = f"""@echo off
-setlocal enabledelayedexpansion
-
-:: Forzar cierre de cualquier instancia residual para liberar python3x.dll y temporales
-taskkill /f /im "{nombre_exe}" > nul 2>&1
-timeout /t 2 /nobreak > nul
-
-:: Bucle de reemplazo asegurando que el archivo temporal ya no exista
-:retry
-move /y "{ruta_exe_nuevo}" "{ruta_exe_actual}" > nul 2>&1
-if exist "{ruta_exe_nuevo}" (
-    timeout /t 1 /nobreak > nul
-    goto retry
-)
-
-:: Breve respiro para que el kernel de Windows libere los descriptores
-timeout /t 1 /nobreak > nul
-
-:: Iniciar el ejecutable actualizado con su carpeta como directorio de trabajo
-cd /d "{directorio_app}"
-start "" "{ruta_exe_actual}"
-
-:: Autoeliminación del instalador temporal
-del "%~f0"
-"""
-        with open(ruta_bat, "w", encoding="utf-8") as f:
-            f.write(script_bat)
-
-        # 4. Lanzar updater en segundo plano desacoplado y cerrar proceso actual
-        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-        subprocess.Popen(["cmd.exe", "/c", ruta_bat], creationflags=flags)
-
-        sys.exit(0)
-
-    except Exception as e:
-        if os.path.exists(ruta_exe_nuevo):
-            try:
-                os.remove(ruta_exe_nuevo)
-            except Exception:
-                pass
-        messagebox.showerror(
-            "Error al actualizar",
-            f"Fallo al descargar o preparar la actualización:\n{e}",
-            parent=parent
-        )
 # --- GENERADOR DE PDF ---
 class TicketPDF(FPDF):
     def __init__(self):
