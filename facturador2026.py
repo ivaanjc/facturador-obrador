@@ -3,10 +3,16 @@ import sys
 import json
 import datetime
 import subprocess
+import urllib.request
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
 from fpdf import FPDF
+
+# --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
+VERSION_ACTUAL = "1.0.1"
+# Reemplaza con la URL RAW de tu repositorio en GitHub
+URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
 ctk.set_appearance_mode("System")
@@ -63,7 +69,70 @@ def guardar_json(ruta, datos):
         return False
 
 
-# --- GENERADOR DE PDF (FUENTES AMPLIADAS) ---
+# --- LÓGICA DE AUTO-ACTUALIZACIÓN ---
+def comprobar_actualizacion(parent=None):
+    if not getattr(sys, 'frozen', False):
+        return
+
+    try:
+        req = urllib.request.Request(
+            URL_VERSION_REMOTA, 
+            headers={'User-Agent': 'FacturadorBelisUpdater'}
+        )
+        with urllib.request.urlopen(req, timeout=4) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            version_remota = data.get("version")
+            url_descarga = data.get("url")
+
+        if version_remota and version_remota > VERSION_ACTUAL:
+            resp = messagebox.askyesno(
+                "Actualización disponible",
+                f"Hay una nueva versión disponible ({version_remota}).\n"
+                f"Versión actual: {VERSION_ACTUAL}\n\n"
+                "¿Deseas descargar la actualización y reiniciar la aplicación ahora?",
+                parent=parent
+            )
+            if resp:
+                ejecutar_actualizacion(url_descarga, parent)
+    except Exception:
+        # Falla de red, timeout o URL no configurada todavía; se ignora en silencio
+        pass
+
+def ejecutar_actualizacion(url_descarga, parent=None):
+    try:
+        ruta_exe_actual = sys.executable
+        directorio_app = os.path.dirname(ruta_exe_actual)
+        ruta_exe_nuevo = os.path.join(directorio_app, "Facturador_update.tmp")
+        ruta_bat = os.path.join(directorio_app, "updater.bat")
+
+        # Descarga del nuevo ejecutable
+        urllib.request.urlretrieve(url_descarga, ruta_exe_nuevo)
+
+        # Generar script .bat para desacoplar el proceso y reemplazar el binario
+        script_bat = f"""@echo off
+timeout /t 2 /nobreak > nul
+:retry
+move /y "{ruta_exe_nuevo}" "{ruta_exe_actual}" > nul 2>&1
+if exist "{ruta_exe_nuevo}" (
+    timeout /t 1 /nobreak > nul
+    goto retry
+)
+start "" "{ruta_exe_actual}"
+del "%~f0"
+"""
+        with open(ruta_bat, "w") as f:
+            f.write(script_bat)
+
+        # Lanzar proceso independiente en segundo plano
+        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        subprocess.Popen(["cmd.exe", "/c", ruta_bat], creationflags=flags)
+        
+        sys.exit(0)
+    except Exception as e:
+        messagebox.showerror("Error al actualizar", f"No se pudo completar la actualización: {e}", parent=parent)
+
+
+# --- GENERADOR DE PDF ---
 class TicketPDF(FPDF):
     def __init__(self):
         super().__init__(orientation='P', unit='mm', format=(80, 220))
@@ -94,7 +163,7 @@ class TicketPDF(FPDF):
         self.cell(72, 4, f"Fecha: {fecha_hora}", ln=True, align='C')
         self.ln(2)
 
-        # 3. Emisor (incluye NIF, Registro Sanitario y Domicilio)
+        # 3. Emisor
         self.set_font("Helvetica", "B", 9)
         self.cell(72, 4.5, "DATOS DEL EMISOR", ln=True, border='B')
         self.set_font("Helvetica", "", 8.5)
@@ -397,7 +466,7 @@ class GestionProductosModal(ctk.CTkToplevel):
 class FacturadorApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Facturación Obrador Belis")
+        self.title(f"Facturación Obrador Belis - v{VERSION_ACTUAL}")
         self.geometry("1040x640")
         self.minsize(940, 560)
 
@@ -418,6 +487,9 @@ class FacturadorApp(ctk.CTk):
         self.items_factura = []
         self.crear_interfaz()
 
+        # Comprobar actualizaciones en segundo plano 1s después del arranque
+        self.after(1000, lambda: comprobar_actualizacion(parent=self))
+
     def get_num_factura(self):
         return f"{self.config_data['anio']}/{(self.config_data['ultimo_num'] + 1):03d}"
 
@@ -436,7 +508,6 @@ class FacturadorApp(ctk.CTk):
         )
         self.chk_tipo.pack(pady=5, padx=15, anchor="w")
 
-        # Emisor: se añade R.G.S.E.A.A. y se ajusta la altura a 75 para albergar las 4 líneas
         ctk.CTkLabel(left_panel, text="Emisor:", font=("Helvetica", 12, "bold")).pack(anchor="w", padx=15, pady=(8, 0))
         self.txt_emisor = ctk.CTkTextbox(left_panel, height=75, width=260)
         self.txt_emisor.insert(
@@ -580,7 +651,6 @@ class FacturadorApp(ctk.CTk):
             messagebox.showerror("Error", "Comprueba que la cantidad, el precio y el IVA sean números válidos.")
 
     def sumar_item(self, idx):
-        """Suma 1 a la cantidad del producto y actualiza los importes."""
         if 0 <= idx < len(self.items_factura):
             it = self.items_factura[idx]
             it["cant"] += 1.0
@@ -589,7 +659,6 @@ class FacturadorApp(ctk.CTk):
             self.refrescar_tabla()
 
     def restar_item(self, idx):
-        """Resta 1 a la cantidad del producto. Si llega a 0 o menos, lo borra."""
         if 0 <= idx < len(self.items_factura):
             it = self.items_factura[idx]
             if it["cant"] > 1:
@@ -612,20 +681,18 @@ class FacturadorApp(ctk.CTk):
             fila = ctk.CTkFrame(self.frame_items)
             fila.pack(fill="x", pady=2)
             
-            # Texto que al clicar suma 1 a la cantidad
             lbl_desc = f"{item['cant']:.1f}x  {item['desc']} ({item['precio']:.2f}€ + {item['iva']}%)"
             btn_sumar_texto = ctk.CTkButton(
                 fila,
                 text=lbl_desc,
                 anchor="w",
-                fg_color="transparent",
+                fg_color="transparent", 
                 hover_color=("gray80", "gray25"),
                 text_color=("black", "white"),
                 command=lambda i=idx: self.sumar_item(i)
             )
             btn_sumar_texto.pack(side="left", padx=5, fill="x", expand=True)
 
-            # Botón para eliminar por completo
             btn_del = ctk.CTkButton(
                 fila, text="X", width=26, height=24, 
                 fg_color="#c62828", hover_color="#8e0000",
@@ -633,7 +700,6 @@ class FacturadorApp(ctk.CTk):
             )
             btn_del.pack(side="right", padx=(3, 5))
 
-            # Botón [+] para sumar una unidad
             btn_mas = ctk.CTkButton(
                 fila, text="+", width=26, height=24, 
                 fg_color="#2e7d32", hover_color="#1b5e20",
@@ -641,7 +707,6 @@ class FacturadorApp(ctk.CTk):
             )
             btn_mas.pack(side="right", padx=3)
 
-            # Botón [-] para restar una unidad
             btn_menos = ctk.CTkButton(
                 fila, text="-", width=26, height=24, 
                 fg_color="#ef6c00", hover_color="#b26a00",
@@ -649,7 +714,6 @@ class FacturadorApp(ctk.CTk):
             )
             btn_menos.pack(side="right", padx=3)
 
-            # Importe total de la fila
             ctk.CTkLabel(
                 fila, 
                 text=f"{item['total']:.2f} €", 
