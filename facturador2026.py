@@ -11,7 +11,7 @@ from fpdf import FPDF
 if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.6"
+VERSION_ACTUAL = "1.0.7"
 # Reemplaza con la URL RAW de tu repositorio en GitHub
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
@@ -614,7 +614,7 @@ class FacturadorApp(ctk.CTk):
         self.lbl_num_doc = ctk.CTkLabel(right_panel, text=f"Documento actual: {self.get_num_factura()}", font=("Helvetica", 15, "bold"))
         self.lbl_num_doc.pack(pady=10)
 
-        self.frame_items = ctk.CTkScrollableFrame(right_panel, label_text="Artículos del Documento (Haz clic en el producto para +1)")
+        self.frame_items = ctk.CTkScrollableFrame(right_panel, label_text="Artículos del Documento")
         self.frame_items.pack(fill="both", expand=True, padx=10, pady=5)
 
         totales_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
