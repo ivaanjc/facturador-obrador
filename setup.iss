@@ -3,10 +3,9 @@ AppName=Facturador Obrador Belis
 AppVersion={#AppVersion}
 DefaultDirName={localappdata}\ObradorBelis
 DisableDirPage=yes
-UsePreviousAppDir=yes
-; Permite instalar en carpetas raíz o especiales (como el Escritorio) sin restricciones
+; OBLIGATORIO: 'no' para que obedezca siempre al parámetro /DIR recibido por comando
+UsePreviousAppDir=no
 AllowRootDirectory=yes
-; Evita que Inno Setup añada subcarpetas adicionales al /DIR recibido
 AppendDefaultDirName=no
 OutputDir=dist_installer
 OutputBaseFilename=Instalador_Facturador
@@ -14,30 +13,30 @@ Compression=lzma2
 SolidCompression=yes
 CloseApplications=yes
 PrivilegesRequired=lowest
+SetupIconFile=fuentes-letra\icono.ico
 
 [Tasks]
 Name: "desktopicon"; Description: "Crear acceso directo en el Escritorio"; GroupDescription: "Iconos adicionales:"
 
 [Files]
-; Guarda el nuevo ejecutable sobrescribiendo el nombre exacto que tenía el anterior
-Source: "dist\facturador2026.exe"; DestDir: "{app}"; DestName: "{code:GetTargetExeName}"; Flags: ignoreversion restartreplace
+; Solo 'ignoreversion': fuerza la sobrescritura directa en caliente
+Source: "dist\facturador2026.exe"; DestDir: "{app}"; DestName: "{code:GetTargetExeName}"; Flags: ignoreversion
 
-; Fuentes y logo
+; Fuentes, logo e icono
 Source: "fuentes-letra\*"; DestDir: "{app}\fuentes-letra"; Flags: ignoreversion recursesubdirs createallsubdirs
-
-[Run]
-; Inicia el archivo con el nombre que se acaba de actualizar
-Filename: "{app}\{code:GetTargetExeName}"; Description: "Iniciar Facturador"; Flags: nowait postinstall skipifsilent
 
 [Icons]
 Name: "{autodesktop}\Facturador Obrador Belis"; Filename: "{app}\{code:GetTargetExeName}"; IconFilename: "{app}\fuentes-letra\icono.ico"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\{code:GetTargetExeName}"; WorkingDir: "{app}"; Flags: nowait
+
 [Code]
-// Función que obtiene el nombre del .exe recibido por parámetro o usa el predeterminado
 function GetTargetExeName(Param: String): String;
 var
   CustomName: String;
 begin
-  CustomName := ExpandConstant('{param:EXENAME}');
+  CustomName := RemoveQuotes(ExpandConstant('{param:EXENAME}'));
   if CustomName <> '' then
     Result := CustomName
   else
@@ -48,7 +47,6 @@ procedure DeinitializeSetup();
 var
   InstallerTmp: String;
 begin
-  // Limpia el instalador descargado de %TEMP%
   InstallerTmp := ExpandConstant('{tmp}\Instalador_Facturador_update.exe');
   if FileExists(InstallerTmp) then
     RestartReplace(InstallerTmp, '');
