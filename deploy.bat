@@ -1,50 +1,95 @@
 @echo off
+setlocal enabledelayedexpansion
+
 set /p VERSION="Introduce la nueva version (ej. 1.1.0): "
+if "%VERSION%"=="" (
+    echo [ERROR] La version no puede estar vacia.
+    pause
+    exit /b 1
+)
+
+set /p MSG="Mensaje de cambios (Enter para omitir): "
+if "%MSG%"=="" set MSG=Actualizacion a version %VERSION%
 
 echo.
-echo [1/5] Compilando facturador2026.py con PyInstaller...
+echo ======================================================
+echo [1/5] Compilando con PyInstaller...
+echo ======================================================
 pyinstaller --noconsole --onefile --clean ^
-    --add-data "logo.png;." ^
+    --add-data "fuentes-letra;fuentes-letra" ^
     --collect-all customtkinter ^
     facturador2026.py
 
 if errorlevel 1 (
-    echo Error durante la compilacion.
+    echo.
+    echo [ERROR] Fallo la compilacion de PyInstaller.
     pause
-    exit /b %errorlevel%
+    exit /b 1
 )
 
 echo.
-echo [2/5] Creando instalador independiente con Inno Setup...
-"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=%VERSION% setup.iss
+echo ======================================================
+echo [2/5] Buscando Inno Setup y compilando instalador...
+echo ======================================================
+set "ISCC_PATH="
+if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" set "ISCC_PATH=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+if exist "C:\Program Files\Inno Setup 6\ISCC.exe" set "ISCC_PATH=C:\Program Files\Inno Setup 6\ISCC.exe"
+if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" set "ISCC_PATH=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
 
+if "%ISCC_PATH%"=="" (
+    echo.
+    echo [ERROR] No se encontro ISCC.exe. Verifica la instalacion de Inno Setup.
+    pause
+    exit /b 1
+)
+
+"%ISCC_PATH%" /DAppVersion=%VERSION% setup.iss
 if errorlevel 1 (
-    echo Error al generar el instalador.
+    echo.
+    echo [ERROR] Fallo al compilar el instalador con Inno Setup.
     pause
-    exit /b %errorlevel%
+    exit /b 1
 )
 
 echo.
+echo ======================================================
 echo [3/5] Actualizando version.json...
+echo ======================================================
 (
 echo {
-echo    "version": "%VERSION%",
-echo    "url": "https://github.com/ivaanjc/facturador-obrador/releases/download/v%VERSION%/Instalador_Facturador.exe"
+echo     "version": "%VERSION%",
+echo     "url": "https://github.com/ivaanjc/facturador-obrador/releases/download/v%VERSION%/Instalador_Facturador.exe"
 echo }
 ) > version.json
 
 echo.
-echo [4/5] Sincronizando con Git...
+echo ======================================================
+echo [4/5] Guardando en Git...
+echo ======================================================
 git add -A
-git commit -m "Lanzamiento v%VERSION%"
+git commit -m "%MSG% - v%VERSION%"
 git push origin main
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Fallo el git push. Revisa credenciales o conflictos.
+    pause
+    exit /b 1
+)
 
 echo.
-echo [5/5] Creando Release en GitHub y subiendo Instalador_Facturador.exe...
-gh release create v%VERSION% dist_installer/Instalador_Facturador.exe --title "Version %VERSION%" --notes "Actualizacion automatica v%VERSION%"
+echo ======================================================
+echo [5/5] Publicando Release en GitHub...
+echo ======================================================
+gh release create v%VERSION% dist_installer\Instalador_Facturador.exe --title "Version %VERSION%" --notes "%MSG%"
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Fallo al crear la release con GitHub CLI.
+    pause
+    exit /b 1
+)
 
 echo.
-echo ===============================================
-echo  Despliegue completado con exito.
-echo ===============================================
+echo ======================================================
+echo  DESPLIEGUE FINALIZADO CON EXITO (v%VERSION%)
+echo ======================================================
 pause
