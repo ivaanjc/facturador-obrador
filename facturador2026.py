@@ -16,7 +16,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.1.2"
+VERSION_ACTUAL = "1.1.3"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -184,16 +184,44 @@ class VentanaDescarga(ctk.CTkToplevel):
     def _finalizar_y_ejecutar(self, ruta_instalador):
             self.lbl_estado.configure(text="Instalando y reiniciando...")
             
-            # 1. Normalizar rutas a formato nativo de Windows (barras invertidas \)
+            # Rutas absolutas y limpias
             ruta_exe_actual = os.path.normpath(sys.executable)
             directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_actual))
             nombre_exe_actual = os.path.basename(ruta_exe_actual)
-            
-            # 2. Comando directo como string para controlar exactamente las comillas
-            # Inno Setup requiere: /DIR="C:\Ruta Con Espacios"
-            cmd = f'"{ruta_instalador}" /DIR="{directorio_actual}" /EXENAME="{nombre_exe_actual}" /SILENT /CLOSEAPPLICATIONS'
-            
-            subprocess.Popen(cmd, shell=True)
+            pid_actual = os.getpid()
+
+            temp_dir = os.environ.get("TEMP", directorio_actual)
+            updater_bat = os.path.join(temp_dir, "ejecutar_update.bat")
+
+            # Script BAT que:
+            # 1. Espera a que el proceso actual (por PID) muera del todo
+            # 2. Lanza el instalador sobreescribiendo en la ruta exacta
+            # 3. Se autoelimina al terminar
+            contenido_bat = f"""@echo off
+    :wait_proc
+    tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL
+    if not errorlevel 1 (
+        timeout /t 1 /nobreak >nul
+        goto wait_proc
+    )
+
+    timeout /t 1 /nobreak >nul
+
+    "{ruta_instalador}" /DIR="{directorio_actual}" /EXENAME="{nombre_exe_actual}" /SILENT /CLOSEAPPLICATIONS
+
+    del "%~f0"
+    """
+            with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
+                f.write(contenido_bat)
+
+            # Lanza el script en segundo plano sin ventana visible
+            subprocess.Popen(
+                ["cmd.exe", "/c", updater_bat],
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                close_fds=True
+            )
+
+            # Destruir la interfaz y salir de inmediato
             self.master.destroy()
             sys.exit(0)
 
