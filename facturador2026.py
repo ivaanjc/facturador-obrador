@@ -16,7 +16,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.1.0"
+VERSION_ACTUAL = "1.0.0"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -31,14 +31,19 @@ else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     ASSET_DIR = BASE_DIR
 
+# Carpeta de recursos adicionales (fuentes y logo)
+FUENTES_DIR = os.path.join(ASSET_DIR, 'fuentes-letra')
+if not os.path.exists(FUENTES_DIR):
+    FUENTES_DIR = os.path.join(BASE_DIR, 'fuentes-letra')
+
+# Búsqueda de logo.png dentro de fuentes-letra o en la raíz como respaldo
+LOGO_FILE = os.path.join(FUENTES_DIR, 'logo.png')
+if not os.path.exists(LOGO_FILE):
+    LOGO_FILE = os.path.join(BASE_DIR, 'logo.png')
+
 CLIENTES_FILE = os.path.join(BASE_DIR, 'clientes.json')
 PRODUCTOS_FILE = os.path.join(BASE_DIR, 'productos.json')
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
-
-# Logo: busca primero embebido (en caso de .exe) y luego junto al script
-LOGO_FILE = os.path.join(ASSET_DIR, 'logo.png')
-if not os.path.exists(LOGO_FILE):
-    LOGO_FILE = os.path.join(BASE_DIR, 'logo.png')
 
 
 # --- PERSISTENCIA DE DATOS JSON ---
@@ -74,7 +79,7 @@ def guardar_json(ruta, datos):
         return False
 
 
-# --- LÓGICA DE AUTO-ACTUALIZACIÓN ---
+# --- LÓGICA DE AUTO-ACTUALIZACIÓN MEDIANTE INSTALADOR ---
 def parse_version(v_str):
     try:
         limpio = v_str.strip().lstrip('v')
@@ -83,10 +88,10 @@ def parse_version(v_str):
         return (0, 0, 0)
 
 class VentanaDescarga(ctk.CTkToplevel):
-    def __init__(self, master, url_descarga):
+    def __init__(self, master, url_instalador):
         super().__init__(master)
         self.master = master
-        self.url_descarga = url_descarga
+        self.url_instalador = url_instalador
         
         self.title("Descargando actualización")
         self.geometry("420x180")
@@ -120,15 +125,12 @@ class VentanaDescarga(ctk.CTkToplevel):
         threading.Thread(target=self._descargar_hilo, daemon=True).start()
 
     def _descargar_hilo(self):
-        ruta_exe_actual = sys.executable
-        directorio_app = os.path.dirname(ruta_exe_actual)
-        nombre_exe = os.path.basename(ruta_exe_actual)
-        ruta_exe_nuevo = os.path.join(directorio_app, "facturador2026_update.tmp")
-        ruta_bat = os.path.join(directorio_app, "updater.bat")
+        temp_dir = os.environ.get("TEMP", os.path.dirname(sys.executable))
+        ruta_instalador = os.path.join(temp_dir, "Instalador_Facturador_update.exe")
 
         try:
             req = urllib.request.Request(
-                self.url_descarga,
+                self.url_instalador,
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
             )
 
@@ -139,7 +141,7 @@ class VentanaDescarga(ctk.CTkToplevel):
                 descargados = 0
                 bloque_size = 1024 * 64
                 
-                with open(ruta_exe_nuevo, 'wb') as f_out:
+                with open(ruta_instalador, 'wb') as f_out:
                     while True:
                         chunk = resp.read(bloque_size)
                         if not chunk:
@@ -151,47 +153,27 @@ class VentanaDescarga(ctk.CTkToplevel):
                             porcentaje = descargados / total_bytes
                             mb_actual = descargados / (1024 * 1024)
                             mb_total = total_bytes / (1024 * 1024)
-                            texto_progreso = f"{mb_actual:.2f} MB / {mb_total:.2f} MB ({int(porcentaje * 100)}%)"
-                            self.after(0, self._actualizar_ui, porcentaje, texto_progreso)
+                            texto = f"{mb_actual:.2f} MB / {mb_total:.2f} MB ({int(porcentaje * 100)}%)"
+                            self.after(0, self._actualizar_ui, porcentaje, texto)
                         else:
                             mb_actual = descargados / (1024 * 1024)
                             self.after(0, self._actualizar_ui_indeterminada, f"{mb_actual:.2f} MB descargados")
 
-            tamano_mb = os.path.getsize(ruta_exe_nuevo) / (1024 * 1024)
-            if tamano_mb < 5.0:
-                raise ValueError(f"Archivo incompleto ({tamano_mb:.2f} MB).")
+            tamano_mb = os.path.getsize(ruta_instalador) / (1024 * 1024)
+            if tamano_mb < 2.0:
+                raise ValueError(f"Instalador incompleto ({tamano_mb:.2f} MB).")
 
-            self.after(0, lambda: self.lbl_estado.configure(text="¡Descarga completada! Reiniciando..."))
-            
-            script_bat = f"""@echo off
-setlocal enabledelayedexpansion
+            self.after(0, lambda: self.lbl_estado.configure(text="Iniciando instalación silenciosa..."))
+            time.sleep(1)
 
-taskkill /f /im "{nombre_exe}" > nul 2>&1
-timeout /t 2 /nobreak > nul
-
-:retry
-move /y "{ruta_exe_nuevo}" "{ruta_exe_actual}" > nul 2>&1
-if exist "{ruta_exe_nuevo}" (
-    timeout /t 1 /nobreak > nul
-    goto retry
-)
-
-timeout /t 1 /nobreak > nul
-cd /d "{directorio_app}"
-start "" "{ruta_exe_actual}"
-del "%~f0"
-"""
-            with open(ruta_bat, "w", encoding="utf-8") as f:
-                f.write(script_bat)
-
-            flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-            subprocess.Popen(["cmd.exe", "/c", ruta_bat], creationflags=flags)
+            # Ejecutar el instalador en modo silencioso y cerrar esta app para liberar archivos
+            subprocess.Popen([ruta_instalador, "/SILENT", "/CLOSEAPPLICATIONS"])
             sys.exit(0)
 
         except Exception as e:
-            if os.path.exists(ruta_exe_nuevo):
+            if os.path.exists(ruta_instalador):
                 try:
-                    os.remove(ruta_exe_nuevo)
+                    os.remove(ruta_instalador)
                 except Exception:
                     pass
             self.after(0, self._mostrar_error, str(e))
@@ -209,7 +191,7 @@ del "%~f0"
         self.destroy()
         messagebox.showerror(
             "Fallo al actualizar", 
-            f"No se pudo completar la descarga:\n{error_msg}", 
+            f"No se pudo completar la actualización:\n{error_msg}", 
             parent=self.master
         )
 
@@ -218,7 +200,7 @@ def comprobar_actualizacion(parent=None, manual=False):
         if manual:
             messagebox.showinfo(
                 "Modo desarrollo", 
-                "Estás ejecutando el script .py. Las actualizaciones funcionan en el .exe compilado.",
+                "Estás ejecutando el script .py. Las actualizaciones automáticas funcionan sobre la app instalada (.exe).",
                 parent=parent
             )
         return
@@ -238,18 +220,18 @@ def comprobar_actualizacion(parent=None, manual=False):
         with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode('utf-8'))
             version_remota = data.get("version", "").strip()
-            url_descarga = data.get("url")
+            url_instalador = data.get("url")
 
         if version_remota and parse_version(version_remota) > parse_version(VERSION_ACTUAL):
             resp = messagebox.askyesno(
                 "Actualización disponible",
                 f"Hay una nueva versión disponible ({version_remota}).\n"
                 f"Versión actual: {VERSION_ACTUAL}\n\n"
-                "¿Deseas descargar la actualización ahora?",
+                "¿Deseas descargar e instalar la actualización ahora?",
                 parent=parent
             )
             if resp:
-                VentanaDescarga(parent, url_descarga)
+                VentanaDescarga(parent, url_instalador)
         else:
             if manual:
                 messagebox.showinfo(
@@ -314,7 +296,7 @@ class TicketPDF(FPDF):
             self.multi_cell(72, 4, info_cli)
             self.ln(2)
 
-        # 5. Encabezado tabla (72 mm total: 26 + 10 + 14 + 8 + 14)
+        # 5. Encabezado tabla
         self.set_font("Helvetica", "B", 8)
         self.cell(26, 4.5, "Articulo", border='TB')
         self.cell(10, 4.5, "Cant", border='TB', align='C')
