@@ -14,67 +14,35 @@ PrivilegesRequired=lowest
 [Tasks]
 Name: "desktopicon"; Description: "Crear acceso directo en el Escritorio"; GroupDescription: "Iconos adicionales:"
 
-[InstallDelete]
-; Limpieza de accesos directos antiguos con nombres genéricos
-Type: files; Name: "{autodesktop}\facturador2026.exe.lnk"
-Type: files; Name: "{autodesktop}\facturador2026.lnk"
-Type: files; Name: "{userdesktop}\facturador2026.exe.lnk"
-Type: files; Name: "{userdesktop}\facturador2026.lnk"
-Type: files; Name: "{app}\facturador2026_update.tmp"
-Type: files; Name: "{app}\*.old"
-
 [Files]
-; Binario principal (ignora versión para sobrescribir siempre)
-Source: "dist\facturador2026.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Guarda el nuevo ejecutable sobrescribiendo el nombre exacto que tenía el anterior
+Source: "dist\facturador2026.exe"; DestDir: "{app}"; DestName: "{code:GetTargetExeName}"; Flags: ignoreversion restartreplace
 
-; Fuentes y logo en su subcarpeta sin tocar archivos JSON
+; Fuentes y logo
 Source: "fuentes-letra\*"; DestDir: "{app}\fuentes-letra"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-[Icons]
-Name: "{group}\Facturador Obrador Belis"; Filename: "{app}\facturador2026.exe"
-Name: "{autodesktop}\Facturador Obrador Belis"; Filename: "{app}\facturador2026.exe"; Tasks: desktopicon
-
 [Run]
-Filename: "{app}\facturador2026.exe"; Description: "Iniciar Facturador"; Flags: nowait postinstall skipifsilent
+; Inicia el archivo con el nombre que se acaba de actualizar
+Filename: "{app}\{code:GetTargetExeName}"; Description: "Iniciar Facturador"; Flags: nowait postinstall skipifsilent
 
 [Code]
-procedure CurStepChanged(CurStep: TSetupStep);
+// Función que obtiene el nombre del .exe recibido por parámetro o usa el predeterminado
+function GetTargetExeName(Param: String): String;
 var
-  OldExe: String;
-  Retries: Integer;
+  CustomName: String;
 begin
-  // Se ejecuta tras copiar el binario nuevo y antes de arrancar la aplicación
-  if CurStep = ssPostInstall then
-  begin
-    OldExe := ExpandConstant('{param:OLDEXE}');
-    
-    // Si se especificó el parámetro /OLDEXE y el archivo existe
-    if (OldExe <> '') and FileExists(OldExe) then
-    begin
-      // Solo borrar si el archivo antiguo tiene un nombre distinto al nuevo destino
-      if CompareText(OldExe, ExpandConstant('{app}\facturador2026.exe')) <> 0 then
-      begin
-        Retries := 0;
-        while FileExists(OldExe) and (Retries < 5) do
-        begin
-          if DeleteFile(OldExe) then
-            Break;
-          Sleep(300);
-          Retries := Retries + 1;
-        end;
-        // Si el proceso previo aún retiene el archivo, programar el borrado al reiniciar o liberar
-        if FileExists(OldExe) then
-          RestartReplace(OldExe, '');
-      end;
-    end;
-  end;
+  CustomName := ExpandConstant('{param:EXENAME}');
+  if CustomName <> '' then
+    Result := CustomName
+  else
+    Result := 'facturador2026.exe';
 end;
 
 procedure DeinitializeSetup();
 var
   InstallerTmp: String;
 begin
-  // Marca el propio instalador descargado en %TEMP% para borrarse tras salir
+  // Limpia el instalador descargado de %TEMP%
   InstallerTmp := ExpandConstant('{tmp}\Instalador_Facturador_update.exe');
   if FileExists(InstallerTmp) then
     RestartReplace(InstallerTmp, '');

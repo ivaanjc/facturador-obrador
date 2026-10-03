@@ -16,7 +16,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.5"
+VERSION_ACTUAL = "1.0.6"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -175,24 +175,22 @@ class VentanaDescarga(ctk.CTkToplevel):
     def _finalizar_y_ejecutar(self, ruta_instalador):
             self.lbl_estado.configure(text="Instalando y reiniciando...")
             
-            # Carpeta exacta donde reside el .exe en ejecución (ej: Desktop\programa facturacion)
-            directorio_actual = os.path.dirname(sys.executable)
+            # Ruta completa del ejecutable en curso
+            ruta_exe_actual = sys.executable
+            directorio_actual = os.path.dirname(ruta_exe_actual)
+            nombre_exe_actual = os.path.basename(ruta_exe_actual)
             
-            # Se entrecomilla la ruta interna por si contiene espacios en el nombre de las carpetas
             cmd = [
                 ruta_instalador,
                 f'/DIR="{directorio_actual}"',
-                f'/OLDEXE="{sys.executable}"',
+                f'/EXENAME="{nombre_exe_actual}"',
                 "/SILENT",
                 "/CLOSEAPPLICATIONS"
             ]
             
             subprocess.Popen(cmd)
-            
-            # Cierra la app actual de inmediato para liberar el archivo ejecutable
             self.master.destroy()
             sys.exit(0)
-
     def _actualizar_ui(self, porcentaje, texto):
         self.progress_bar.set(porcentaje)
         self.lbl_estado.configure(text="Descargando actualización...")
