@@ -16,7 +16,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.4"
+VERSION_ACTUAL = "1.0.5"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -182,6 +182,7 @@ class VentanaDescarga(ctk.CTkToplevel):
             cmd = [
                 ruta_instalador,
                 f'/DIR="{directorio_actual}"',
+                f'/OLDEXE="{sys.executable}"',
                 "/SILENT",
                 "/CLOSEAPPLICATIONS"
             ]
