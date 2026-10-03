@@ -1,17 +1,19 @@
 [Setup]
 AppName=Facturador Obrador Belis
 AppVersion={#AppVersion}
-SetupIconFile=fuentes-letra\icono.ico
 DefaultDirName={localappdata}\ObradorBelis
 DisableDirPage=yes
 UsePreviousAppDir=yes
+; Permite instalar en carpetas raíz o especiales (como el Escritorio) sin restricciones
+AllowRootDirectory=yes
+; Evita que Inno Setup añada subcarpetas adicionales al /DIR recibido
+AppendDefaultDirName=no
 OutputDir=dist_installer
 OutputBaseFilename=Instalador_Facturador
 Compression=lzma2
 SolidCompression=yes
 CloseApplications=yes
 PrivilegesRequired=lowest
-AllowRootDirectory=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "Crear acceso directo en el Escritorio"; GroupDescription: "Iconos adicionales:"

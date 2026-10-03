@@ -16,7 +16,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.8"
+VERSION_ACTUAL = "1.0.9"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -184,20 +184,16 @@ class VentanaDescarga(ctk.CTkToplevel):
     def _finalizar_y_ejecutar(self, ruta_instalador):
             self.lbl_estado.configure(text="Instalando y reiniciando...")
             
-            ruta_exe_actual = sys.executable
-            directorio_actual = os.path.dirname(ruta_exe_actual)
+            # 1. Normalizar rutas a formato nativo de Windows (barras invertidas \)
+            ruta_exe_actual = os.path.normpath(sys.executable)
+            directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_actual))
             nombre_exe_actual = os.path.basename(ruta_exe_actual)
             
-            # Sin comillas manuales: Python se encarga del entrecomillado si hay espacios
-            cmd = [
-                ruta_instalador,
-                f'/DIR={directorio_actual}',
-                f'/EXENAME={nombre_exe_actual}',
-                "/SILENT",
-                "/CLOSEAPPLICATIONS"
-            ]
+            # 2. Comando directo como string para controlar exactamente las comillas
+            # Inno Setup requiere: /DIR="C:\Ruta Con Espacios"
+            cmd = f'"{ruta_instalador}" /DIR="{directorio_actual}" /EXENAME="{nombre_exe_actual}" /SILENT /CLOSEAPPLICATIONS'
             
-            subprocess.Popen(cmd)
+            subprocess.Popen(cmd, shell=True)
             self.master.destroy()
             sys.exit(0)
 
