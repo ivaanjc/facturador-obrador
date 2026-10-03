@@ -153,22 +153,16 @@ class VentanaDescarga(ctk.CTkToplevel):
                             porcentaje = descargados / total_bytes
                             mb_actual = descargados / (1024 * 1024)
                             mb_total = total_bytes / (1024 * 1024)
-                            texto = f"{mb_actual:.2f} MB / {mb_total:.2f} MB ({int(porcentaje * 100)}%)"
-                            self.after(0, self._actualizar_ui, porcentaje, texto)
-                        else:
-                            mb_actual = descargados / (1024 * 1024)
-                            self.after(0, self._actualizar_ui_indeterminada, f"{mb_actual:.2f} MB descargados")
+                            texto_progreso = f"{mb_actual:.2f} MB / {mb_total:.2f} MB ({int(porcentaje * 100)}%)"
+                            self.after(0, self._actualizar_ui, porcentaje, texto_progreso)
 
+            # Umbral rebajado a 1.0 MB para admitir instaladores comprimidos
             tamano_mb = os.path.getsize(ruta_instalador) / (1024 * 1024)
-            if tamano_mb < 2.0:
-                raise ValueError(f"Instalador incompleto ({tamano_mb:.2f} MB).")
+            if tamano_mb < 1.0:
+                raise ValueError(f"Archivo incompleto o corrupto ({tamano_mb:.2f} MB).")
 
-            self.after(0, lambda: self.lbl_estado.configure(text="Iniciando instalación silenciosa..."))
-            time.sleep(1)
-
-            # Ejecutar el instalador en modo silencioso y cerrar esta app para liberar archivos
-            subprocess.Popen([ruta_instalador, "/SILENT", "/CLOSEAPPLICATIONS"])
-            sys.exit(0)
+            # Lanzar la ejecución y cierre en el hilo principal de Tkinter
+            self.after(0, self._finalizar_y_ejecutar, ruta_instalador)
 
         except Exception as e:
             if os.path.exists(ruta_instalador):
@@ -177,6 +171,18 @@ class VentanaDescarga(ctk.CTkToplevel):
                 except Exception:
                     pass
             self.after(0, self._mostrar_error, str(e))
+
+    def _finalizar_y_ejecutar(self, ruta_instalador):
+            self.lbl_estado.configure(text="Abriendo instalador...")
+            
+            # Modo visible: se elimina /SILENT para ver la ventana de instalación completa
+            # Se añade /LOG para que guarde un informe detallado de cualquier error
+            log_path = os.path.join(os.environ.get("TEMP", "."), "inno_update.log")
+            subprocess.Popen([ruta_instalador, f"/LOG={log_path}"])
+            
+            # Cierra la app actual de inmediato para no retener archivos
+            self.master.destroy()
+            sys.exit(0)
 
     def _actualizar_ui(self, porcentaje, texto):
         self.progress_bar.set(porcentaje)
