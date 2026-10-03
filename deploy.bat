@@ -14,6 +14,7 @@ if "%MSG%"=="" set MSG=Actualizacion a version %VERSION%
 echo.
 echo [1/5] Compilando con PyInstaller...
 pyinstaller --noconsole --onefile --clean ^
+    --icon "fuentes-letra\icono.ico" ^
     --add-data "fuentes-letra;fuentes-letra" ^
     --collect-all customtkinter ^
     facturador2026.py

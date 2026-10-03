@@ -1,6 +1,7 @@
 [Setup]
 AppName=Facturador Obrador Belis
 AppVersion={#AppVersion}
+SetupIconFile=fuentes-letra\icono.ico
 DefaultDirName={localappdata}\ObradorBelis
 DisableDirPage=yes
 UsePreviousAppDir=yes
@@ -25,6 +26,8 @@ Source: "fuentes-letra\*"; DestDir: "{app}\fuentes-letra"; Flags: ignoreversion 
 ; Inicia el archivo con el nombre que se acaba de actualizar
 Filename: "{app}\{code:GetTargetExeName}"; Description: "Iniciar Facturador"; Flags: nowait postinstall skipifsilent
 
+[Icons]
+Name: "{autodesktop}\Facturador Obrador Belis"; Filename: "{app}\{code:GetTargetExeName}"; IconFilename: "{app}\fuentes-letra\icono.ico"; Tasks: desktopicon
 [Code]
 // Función que obtiene el nombre del .exe recibido por parámetro o usa el predeterminado
 function GetTargetExeName(Param: String): String;

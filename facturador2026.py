@@ -16,7 +16,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.6"
+VERSION_ACTUAL = "1.0.7"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -31,7 +31,7 @@ else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     ASSET_DIR = BASE_DIR
 
-# Carpeta de recursos adicionales (fuentes y logo)
+# Carpeta de recursos adicionales (fuentes, logo e icono)
 FUENTES_DIR = os.path.join(ASSET_DIR, 'fuentes-letra')
 if not os.path.exists(FUENTES_DIR):
     FUENTES_DIR = os.path.join(BASE_DIR, 'fuentes-letra')
@@ -40,6 +40,11 @@ if not os.path.exists(FUENTES_DIR):
 LOGO_FILE = os.path.join(FUENTES_DIR, 'logo.png')
 if not os.path.exists(LOGO_FILE):
     LOGO_FILE = os.path.join(BASE_DIR, 'logo.png')
+
+# Búsqueda de icono.ico para ventanas
+ICO_FILE = os.path.join(FUENTES_DIR, 'icono.ico')
+if not os.path.exists(ICO_FILE):
+    ICO_FILE = os.path.join(BASE_DIR, 'icono.ico')
 
 CLIENTES_FILE = os.path.join(BASE_DIR, 'clientes.json')
 PRODUCTOS_FILE = os.path.join(BASE_DIR, 'productos.json')
@@ -97,6 +102,12 @@ class VentanaDescarga(ctk.CTkToplevel):
         self.geometry("420x180")
         self.resizable(False, False)
         self.grab_set()
+
+        if os.path.exists(ICO_FILE):
+            try:
+                self.iconbitmap(ICO_FILE)
+            except Exception:
+                pass
 
         self.update_idletasks()
         x = master.winfo_x() + (master.winfo_width() // 2) - 210
@@ -156,12 +167,10 @@ class VentanaDescarga(ctk.CTkToplevel):
                             texto_progreso = f"{mb_actual:.2f} MB / {mb_total:.2f} MB ({int(porcentaje * 100)}%)"
                             self.after(0, self._actualizar_ui, porcentaje, texto_progreso)
 
-            # Umbral rebajado a 1.0 MB para admitir instaladores comprimidos
             tamano_mb = os.path.getsize(ruta_instalador) / (1024 * 1024)
             if tamano_mb < 1.0:
                 raise ValueError(f"Archivo incompleto o corrupto ({tamano_mb:.2f} MB).")
 
-            # Lanzar la ejecución y cierre en el hilo principal de Tkinter
             self.after(0, self._finalizar_y_ejecutar, ruta_instalador)
 
         except Exception as e:
@@ -173,24 +182,25 @@ class VentanaDescarga(ctk.CTkToplevel):
             self.after(0, self._mostrar_error, str(e))
 
     def _finalizar_y_ejecutar(self, ruta_instalador):
-            self.lbl_estado.configure(text="Instalando y reiniciando...")
-            
-            # Ruta completa del ejecutable en curso
-            ruta_exe_actual = sys.executable
-            directorio_actual = os.path.dirname(ruta_exe_actual)
-            nombre_exe_actual = os.path.basename(ruta_exe_actual)
-            
-            cmd = [
-                ruta_instalador,
-                f'/DIR="{directorio_actual}"',
-                f'/EXENAME="{nombre_exe_actual}"',
-                "/SILENT",
-                "/CLOSEAPPLICATIONS"
-            ]
-            
-            subprocess.Popen(cmd)
-            self.master.destroy()
-            sys.exit(0)
+        self.lbl_estado.configure(text="Instalando y reiniciando...")
+        
+        # Ruta completa del ejecutable en curso
+        ruta_exe_actual = sys.executable
+        directorio_actual = os.path.dirname(ruta_exe_actual)
+        nombre_exe_actual = os.path.basename(ruta_exe_actual)
+        
+        cmd = [
+            ruta_instalador,
+            f'/DIR="{directorio_actual}"',
+            f'/EXENAME="{nombre_exe_actual}"',
+            "/SILENT",
+            "/CLOSEAPPLICATIONS"
+        ]
+        
+        subprocess.Popen(cmd)
+        self.master.destroy()
+        sys.exit(0)
+
     def _actualizar_ui(self, porcentaje, texto):
         self.progress_bar.set(porcentaje)
         self.lbl_estado.configure(text="Descargando actualización...")
@@ -370,6 +380,12 @@ class GestionClientesModal(ctk.CTkToplevel):
         self.geometry("620x390")
         self.grab_set()
 
+        if os.path.exists(ICO_FILE):
+            try:
+                self.iconbitmap(ICO_FILE)
+            except Exception:
+                pass
+
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
@@ -483,6 +499,12 @@ class GestionProductosModal(ctk.CTkToplevel):
         self.title("Gestión de Productos")
         self.geometry("620x390")
         self.grab_set()
+
+        if os.path.exists(ICO_FILE):
+            try:
+                self.iconbitmap(ICO_FILE)
+            except Exception:
+                pass
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
@@ -599,6 +621,13 @@ class FacturadorApp(ctk.CTk):
         self.title(f"Facturación Obrador Belis - v{VERSION_ACTUAL}")
         self.geometry("1040x640")
         self.minsize(940, 560)
+
+        # Aplicar icono a la ventana principal si existe
+        if os.path.exists(ICO_FILE):
+            try:
+                self.iconbitmap(ICO_FILE)
+            except Exception:
+                pass
 
         # Cargar datos desde los archivos JSON
         self.clientes = cargar_json(CLIENTES_FILE, [{"nombre": "Cliente Mostrador", "nif": "", "domicilio": ""}])
