@@ -16,7 +16,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.3"
+VERSION_ACTUAL = "1.0.4"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -173,25 +173,24 @@ class VentanaDescarga(ctk.CTkToplevel):
             self.after(0, self._mostrar_error, str(e))
 
     def _finalizar_y_ejecutar(self, ruta_instalador):
-        self.lbl_estado.configure(text="Instalando y reiniciando...")
-        
-        # Ruta de la carpeta donde se encuentra la app actual con los archivos JSON
-        directorio_actual = os.path.dirname(sys.executable)
-        
-        # /DIR fuerza la sobrescritura en la carpeta del programa
-        # /SILENT y /CLOSEAPPLICATIONS realizan la actualización limpia en segundo plano
-        cmd = [
-            ruta_instalador,
-            f"/DIR={directorio_actual}",
-            "/SILENT",
-            "/CLOSEAPPLICATIONS"
-        ]
-        
-        subprocess.Popen(cmd)
-        
-        # Cierra la app actual de inmediato para liberar el .exe y permitir el reemplazo
-        self.master.destroy()
-        sys.exit(0)
+            self.lbl_estado.configure(text="Instalando y reiniciando...")
+            
+            # Carpeta exacta donde reside el .exe en ejecución (ej: Desktop\programa facturacion)
+            directorio_actual = os.path.dirname(sys.executable)
+            
+            # Se entrecomilla la ruta interna por si contiene espacios en el nombre de las carpetas
+            cmd = [
+                ruta_instalador,
+                f'/DIR="{directorio_actual}"',
+                "/SILENT",
+                "/CLOSEAPPLICATIONS"
+            ]
+            
+            subprocess.Popen(cmd)
+            
+            # Cierra la app actual de inmediato para liberar el archivo ejecutable
+            self.master.destroy()
+            sys.exit(0)
 
     def _actualizar_ui(self, porcentaje, texto):
         self.progress_bar.set(porcentaje)
