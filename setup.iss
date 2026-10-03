@@ -11,6 +11,7 @@ Compression=lzma2
 SolidCompression=yes
 CloseApplications=yes
 PrivilegesRequired=lowest
+AllowRootDirectory=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "Crear acceso directo en el Escritorio"; GroupDescription: "Iconos adicionales:"

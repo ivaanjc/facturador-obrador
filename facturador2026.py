@@ -16,7 +16,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.7"
+VERSION_ACTUAL = "1.0.8"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -182,24 +182,24 @@ class VentanaDescarga(ctk.CTkToplevel):
             self.after(0, self._mostrar_error, str(e))
 
     def _finalizar_y_ejecutar(self, ruta_instalador):
-        self.lbl_estado.configure(text="Instalando y reiniciando...")
-        
-        # Ruta completa del ejecutable en curso
-        ruta_exe_actual = sys.executable
-        directorio_actual = os.path.dirname(ruta_exe_actual)
-        nombre_exe_actual = os.path.basename(ruta_exe_actual)
-        
-        cmd = [
-            ruta_instalador,
-            f'/DIR="{directorio_actual}"',
-            f'/EXENAME="{nombre_exe_actual}"',
-            "/SILENT",
-            "/CLOSEAPPLICATIONS"
-        ]
-        
-        subprocess.Popen(cmd)
-        self.master.destroy()
-        sys.exit(0)
+            self.lbl_estado.configure(text="Instalando y reiniciando...")
+            
+            ruta_exe_actual = sys.executable
+            directorio_actual = os.path.dirname(ruta_exe_actual)
+            nombre_exe_actual = os.path.basename(ruta_exe_actual)
+            
+            # Sin comillas manuales: Python se encarga del entrecomillado si hay espacios
+            cmd = [
+                ruta_instalador,
+                f'/DIR={directorio_actual}',
+                f'/EXENAME={nombre_exe_actual}',
+                "/SILENT",
+                "/CLOSEAPPLICATIONS"
+            ]
+            
+            subprocess.Popen(cmd)
+            self.master.destroy()
+            sys.exit(0)
 
     def _actualizar_ui(self, porcentaje, texto):
         self.progress_bar.set(porcentaje)
