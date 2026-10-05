@@ -12,27 +12,27 @@ from tkinter import messagebox
 import customtkinter as ctk
 from fpdf import FPDF
 
-# Fijar el directorio de trabajo en la raíz del ejecutable si está congelado
+# Fijar el directorio de trabajo en la raiz del ejecutable si esta congelado
 if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.2.1"
+VERSION_ACTUAL = "1.2.2"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
-# Configuración visual moderna
+# Configuracion visual moderna
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
 
-# --- CONTEXTO SSL TOLERANTE ---
+# --- CONTEXTO SSL PERMISIVO ---
 def get_ssl_context():
-    """Genera un contexto SSL sin validación estricta para garantizar conexión en cualquier PC."""
+    """Genera un contexto SSL sin validacion estricta para garantizar conexion en cualquier PC."""
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     return ctx
 
-# --- RESOLUCIÓN DE RUTAS ---
+# --- RESOLUCION DE RUTAS ---
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
     ASSET_DIR = sys._MEIPASS
@@ -45,12 +45,12 @@ FUENTES_DIR = os.path.join(ASSET_DIR, 'fuentes-letra')
 if not os.path.exists(FUENTES_DIR):
     FUENTES_DIR = os.path.join(BASE_DIR, 'fuentes-letra')
 
-# Búsqueda de logo.png dentro de fuentes-letra o en la raíz como respaldo
+# Busqueda de logo.png dentro de fuentes-letra o en la raiz como respaldo
 LOGO_FILE = os.path.join(FUENTES_DIR, 'logo.png')
 if not os.path.exists(LOGO_FILE):
     LOGO_FILE = os.path.join(BASE_DIR, 'logo.png')
 
-# Búsqueda de icono.ico para ventanas
+# Busqueda de icono.ico para ventanas
 ICO_FILE = os.path.join(FUENTES_DIR, 'icono.ico')
 if not os.path.exists(ICO_FILE):
     ICO_FILE = os.path.join(BASE_DIR, 'icono.ico')
@@ -75,7 +75,7 @@ def cargar_json(ruta, datos_defecto):
     except Exception as e:
         messagebox.showwarning(
             "Aviso de lectura", 
-            f"No se pudo leer '{os.path.basename(ruta)}': {e}.\nSe usarán datos temporales."
+            f"No se pudo leer '{os.path.basename(ruta)}': {e}.\nSe usaran datos temporales."
         )
         return datos_defecto
 
@@ -93,7 +93,7 @@ def guardar_json(ruta, datos):
         return False
 
 
-# --- LÓGICA DE AUTO-ACTUALIZACIÓN MEDIANTE INSTALADOR ---
+# --- LOGICA DE AUTO-ACTUALIZACION DIRECTA (.EXE) ---
 def parse_version(v_str):
     try:
         limpio = v_str.strip().lstrip('v')
@@ -101,15 +101,15 @@ def parse_version(v_str):
     except Exception:
         return (0, 0, 0)
 
-# --- MODAL MODERNO: NOTIFICACIÓN DE ACTUALIZACIÓN DISPONIBLE ---
+# --- MODAL MODERNO: NOTIFICACION DE ACTUALIZACION DISPONIBLE ---
 class VentanaAvisoActualizacion(ctk.CTkToplevel):
-    def __init__(self, master, version_remota, url_instalador):
+    def __init__(self, master, version_remota, url_nuevo_exe):
         super().__init__(master)
         self.master = master
         self.version_remota = version_remota
-        self.url_instalador = url_instalador
+        self.url_nuevo_exe = url_nuevo_exe
 
-        self.title("Actualización disponible")
+        self.title("Actualizacion disponible")
         self.geometry("460x320")
         self.resizable(False, False)
         self.grab_set()
@@ -136,7 +136,7 @@ class VentanaAvisoActualizacion(ctk.CTkToplevel):
 
         lbl_titulo = ctk.CTkLabel(
             container, 
-            text="¡Nueva versión disponible!", 
+            text="¡Nueva version disponible!", 
             font=("Helvetica", 16, "bold")
         )
         lbl_titulo.pack(pady=(2, 10))
@@ -147,29 +147,29 @@ class VentanaAvisoActualizacion(ctk.CTkToplevel):
 
         fila_v_actual = ctk.CTkFrame(card, fg_color="transparent")
         fila_v_actual.pack(fill="x", padx=15, pady=(8, 2))
-        ctk.CTkLabel(fila_v_actual, text="Versión instalada:", font=("Helvetica", 12)).pack(side="left")
+        ctk.CTkLabel(fila_v_actual, text="Version instalada:", font=("Helvetica", 12)).pack(side="left")
         ctk.CTkLabel(fila_v_actual, text=f"v{VERSION_ACTUAL}", font=("Helvetica", 12, "bold"), text_color="gray50").pack(side="right")
 
         fila_v_nueva = ctk.CTkFrame(card, fg_color="transparent")
         fila_v_nueva.pack(fill="x", padx=15, pady=(2, 8))
-        ctk.CTkLabel(fila_v_nueva, text="Nueva versión:", font=("Helvetica", 12)).pack(side="left")
+        ctk.CTkLabel(fila_v_nueva, text="Nueva version:", font=("Helvetica", 12)).pack(side="left")
         ctk.CTkLabel(fila_v_nueva, text=f"v{self.version_remota}", font=("Helvetica", 13, "bold"), text_color=("#1976d2", "#42a5f5")).pack(side="right")
 
         lbl_sub = ctk.CTkLabel(
             container, 
-            text="La actualización se instalará automáticamente sin tocar tus datos.",
+            text="La actualizacion se instalara directamente sin modificar tus datos.",
             font=("Helvetica", 11),
             text_color=("gray40", "gray65")
         )
         lbl_sub.pack(pady=(8, 12))
 
-        # Botones de acción
+        # Botones de accion
         btn_frame = ctk.CTkFrame(container, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=(0, 10))
 
         btn_cancelar = ctk.CTkButton(
             btn_frame, 
-            text="Más tarde", 
+            text="Mas tarde", 
             width=110,
             fg_color="transparent",
             hover_color=("gray80", "gray25"),
@@ -192,18 +192,18 @@ class VentanaAvisoActualizacion(ctk.CTkToplevel):
         btn_actualizar.pack(side="right", fill="x", expand=True)
 
     def _iniciar_descarga(self):
-        url = self.url_instalador
+        url = self.url_nuevo_exe
         master = self.master
         self.destroy()
         VentanaDescarga(master, url)
 
 
-# --- VENTANA MODERNA DE PROGRESO DE DESCARGA ---
+# --- VENTANA MODERNA DE PROGRESO DE DESCARGA DIRECTA ---
 class VentanaDescarga(ctk.CTkToplevel):
-    def __init__(self, master, url_instalador):
+    def __init__(self, master, url_nuevo_exe):
         super().__init__(master)
         self.master = master
-        self.url_instalador = url_instalador
+        self.url_nuevo_exe = url_nuevo_exe
         
         self.title("Actualizando Facturador")
         self.geometry("450x220")
@@ -245,7 +245,7 @@ class VentanaDescarga(ctk.CTkToplevel):
 
         self.lbl_aviso = ctk.CTkLabel(
             container,
-            text="Por favor, espera mientras se descarga el instalador...",
+            text="Descargando la nueva version del programa...",
             font=("Helvetica", 10),
             text_color="gray50"
         )
@@ -256,11 +256,11 @@ class VentanaDescarga(ctk.CTkToplevel):
 
     def _descargar_hilo(self):
         temp_dir = os.environ.get("TEMP", os.path.dirname(sys.executable))
-        ruta_instalador = os.path.join(temp_dir, "Instalador_Facturador_update.exe")
+        ruta_temporal_exe = os.path.join(temp_dir, "facturador_update.exe")
 
         try:
             req = urllib.request.Request(
-                self.url_instalador,
+                self.url_nuevo_exe,
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
             )
 
@@ -272,7 +272,7 @@ class VentanaDescarga(ctk.CTkToplevel):
                 descargados = 0
                 bloque_size = 1024 * 64
                 
-                with open(ruta_instalador, 'wb') as f_out:
+                with open(ruta_temporal_exe, 'wb') as f_out:
                     while True:
                         chunk = resp.read(bloque_size)
                         if not chunk:
@@ -287,68 +287,74 @@ class VentanaDescarga(ctk.CTkToplevel):
                             texto_progreso = f"{mb_actual:.2f} MB / {mb_total:.2f} MB ({int(porcentaje * 100)}%)"
                             self.after(0, self._actualizar_ui, porcentaje, texto_progreso)
 
-            tamano_mb = os.path.getsize(ruta_instalador) / (1024 * 1024)
-            if tamano_mb < 1.0:
-                raise ValueError(f"Archivo incompleto o corrupto ({tamano_mb:.2f} MB).")
+            # Comprobar que el archivo descargado sea un binario completo
+            tamano_mb = os.path.getsize(ruta_temporal_exe) / (1024 * 1024)
+            if tamano_mb < 3.0:
+                raise ValueError(f"Archivo incompleto o enlace incorrecto ({tamano_mb:.2f} MB).")
 
-            self.after(0, self._finalizar_y_ejecutar, ruta_instalador)
+            self.after(0, self._finalizar_y_reemplazar, ruta_temporal_exe)
 
         except Exception as e:
-            if os.path.exists(ruta_instalador):
+            if os.path.exists(ruta_temporal_exe):
                 try:
-                    os.remove(ruta_instalador)
+                    os.remove(ruta_temporal_exe)
                 except Exception:
                     pass
             self.after(0, self._mostrar_error, str(e))
 
-    def _finalizar_y_ejecutar(self, ruta_instalador):
-            self.lbl_estado.configure(text="Instalando...")
-            self.lbl_aviso.configure(text="Cerrando aplicación para aplicar la actualización...")
-            
-            ruta_exe_actual = os.path.normpath(sys.executable)
-            directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_actual))
-            nombre_exe_actual = os.path.basename(ruta_exe_actual)
-            pid_actual = os.getpid()
+    def _finalizar_y_reemplazar(self, ruta_temporal_exe):
+        self.lbl_estado.configure(text="Aplicando actualizacion...")
+        self.lbl_aviso.configure(text="Sustituyendo ejecutable y reiniciando...")
 
-            temp_dir = os.environ.get("TEMP", directorio_actual)
-            updater_bat = os.path.join(temp_dir, "ejecutar_update.bat")
+        ruta_exe_actual = os.path.normpath(sys.executable)
+        directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_actual))
+        pid_actual = os.getpid()
 
-            # Se ejecuta sin /SILENT para que aparezca la ventana con la casilla final de "¿Desea ejecutar el programa?"
-            contenido_bat = (
-                "@echo off\r\n"
-                ":wait_proc\r\n"
-                f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
-                "if not errorlevel 1 (\r\n"
-                "    timeout /t 1 /nobreak >nul\r\n"
-                "    goto wait_proc\r\n"
-                ")\r\n"
-                "timeout /t 1 /nobreak >nul\r\n"
-                f'call "{ruta_instalador}" /DIR="{directorio_actual}" /EXENAME="{nombre_exe_actual}" /CLOSEAPPLICATIONS\r\n'
-                '(goto) 2>nul & del "%~f0"\r\n'
-            )
-            
-            with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
-                f.write(contenido_bat)
+        temp_dir = os.environ.get("TEMP", directorio_actual)
+        updater_bat = os.path.join(temp_dir, "reemplazar_update.bat")
 
-            subprocess.Popen(
-                ["cmd.exe", "/c", updater_bat],
-                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-                close_fds=True
-            )
+        # Script por lotes que:
+        # 1. Espera a que el proceso actual libere el .exe
+        # 2. Reemplaza el ejecutable viejo por el nuevo directamente
+        # 3. Pregunta con una ventana de confirmacion de Windows si se desea abrir la aplicacion
+        contenido_bat = (
+            "@echo off\r\n"
+            ":wait_proc\r\n"
+            f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
+            "if not errorlevel 1 (\r\n"
+            "    timeout /t 1 /nobreak >nul\r\n"
+            "    goto wait_proc\r\n"
+            ")\r\n"
+            "timeout /t 1 /nobreak >nul\r\n"
+            f'move /y "{ruta_temporal_exe}" "{ruta_exe_actual}" >nul\r\n'
+            'mshta vbscript:Execute("resp=MsgBox(""La actualizacion se ha completado correctamente." & vbCrLf & ""¿Desea abrir el programa ahora?"", 36, ""Actualizacion completada""): If resp=6 Then CreateObject(""WScript.Shell"").Run """""'
+            f'{ruta_exe_actual}'
+            '""""": End If: close")\r\n'
+            '(goto) 2>nul & del "%~f0"\r\n'
+        )
 
-            self.master.destroy()
-            sys.exit(0)
+        with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
+            f.write(contenido_bat)
+
+        subprocess.Popen(
+            ["cmd.exe", "/c", updater_bat],
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            close_fds=True
+        )
+
+        self.master.destroy()
+        sys.exit(0)
 
     def _actualizar_ui(self, porcentaje, texto):
         self.progress_bar.set(porcentaje)
-        self.lbl_estado.configure(text="Descargando actualización...")
+        self.lbl_estado.configure(text="Descargando actualizacion...")
         self.lbl_detalles.configure(text=texto)
 
     def _mostrar_error(self, error_msg):
         self.destroy()
         messagebox.showerror(
             "Fallo al actualizar", 
-            f"No se pudo completar la actualización:\n{error_msg}",
+            f"No se pudo completar la actualizacion:\n{error_msg}",
             parent=self.master
         )
 
@@ -357,7 +363,7 @@ def comprobar_actualizacion(parent=None, manual=False):
         if manual:
             messagebox.showinfo(
                 "Modo desarrollo", 
-                "Estás ejecutando el script .py. Las actualizaciones automáticas funcionan sobre la app instalada (.exe).",
+                "Estas ejecutando el script .py. Las actualizaciones automaticas funcionan sobre la app instalada (.exe).",
                 parent=parent
             )
         return
@@ -374,28 +380,27 @@ def comprobar_actualizacion(parent=None, manual=False):
             }
         )
 
-        # Conexión con contexto SSL permisivo
+        # Conexion con contexto SSL permisivo
         with urllib.request.urlopen(req, timeout=10, context=get_ssl_context()) as response:
             data = json.loads(response.read().decode('utf-8'))
             version_remota = data.get("version", "").strip()
-            url_instalador = data.get("url")
+            url_nuevo_exe = data.get("url")
 
         if version_remota and parse_version(version_remota) > parse_version(VERSION_ACTUAL):
-            # Modal moderno de actualización
-            VentanaAvisoActualizacion(parent, version_remota, url_instalador)
+            VentanaAvisoActualizacion(parent, version_remota, url_nuevo_exe)
         else:
             if manual:
                 messagebox.showinfo(
                     "Sin actualizaciones",
-                    f"Ya tienes la versión más reciente (v{VERSION_ACTUAL}).",
+                    f"Ya tienes la version mas reciente (v{VERSION_ACTUAL}).",
                     parent=parent
                 )
 
     except Exception as e:
         if manual:
             messagebox.showerror(
-                "Error de conexión",
-                f"No se pudo comprobar el estado de actualización:\n{e}",
+                "Error de conexion",
+                f"No se pudo comprobar el estado de actualizacion:\n{e}",
                 parent=parent
             )
 
@@ -420,7 +425,7 @@ class TicketPDF(FPDF):
             except Exception:
                 pass
 
-        # 2. Título y Fecha
+        # 2. Titulo y Fecha
         self.set_font("Helvetica", "B", 11)
         titulo = f"FACTURA SIMPLIFICADA: {num_doc}" if es_factura else f"TICKET DE VENTA: {num_doc}"
         self.multi_cell(72, 4.5, titulo, align='C')
@@ -499,12 +504,12 @@ class TicketPDF(FPDF):
         self.output(ruta_salida)
 
 
-# --- MODAL: GESTIÓN DE CLIENTES ---
+# --- MODAL: GESTION DE CLIENTES ---
 class GestionClientesModal(ctk.CTkToplevel):
     def __init__(self, master):
         super().__init__(master)
         self.master_app = master
-        self.title("Gestión de Clientes")
+        self.title("Gestion de Clientes")
         self.geometry("620x390")
         self.grab_set()
 
@@ -529,7 +534,7 @@ class GestionClientesModal(ctk.CTkToplevel):
 
         ctk.CTkLabel(frame_form, text="Datos del Cliente", font=("Helvetica", 13, "bold")).pack(pady=5)
 
-        self.ent_nombre = ctk.CTkEntry(frame_form, placeholder_text="Nombre / Razón Social")
+        self.ent_nombre = ctk.CTkEntry(frame_form, placeholder_text="Nombre / Razon Social")
         self.ent_nombre.pack(fill="x", padx=10, pady=6)
 
         self.ent_nif = ctk.CTkEntry(frame_form, placeholder_text="NIF / CIF")
@@ -583,7 +588,7 @@ class GestionClientesModal(ctk.CTkToplevel):
         domicilio = self.ent_domicilio.get().strip()
 
         if not nombre:
-            messagebox.showwarning("Atención", "El nombre es obligatorio.", parent=self)
+            messagebox.showwarning("Atencion", "El nombre es obligatorio.", parent=self)
             return
 
         nuevo_dato = {"nombre": nombre, "nif": nif, "domicilio": domicilio}
@@ -597,11 +602,11 @@ class GestionClientesModal(ctk.CTkToplevel):
             self.master_app.actualizar_combos()
             self.recargar_lista()
             self.limpiar_form()
-            messagebox.showinfo("Éxito", f"Cliente '{nombre}' guardado en clientes.json.", parent=self)
+            messagebox.showinfo("Exito", f"Cliente '{nombre}' guardado en clientes.json.", parent=self)
 
     def eliminar_cliente(self):
         if self.cliente_idx_sel is None or not (0 <= self.cliente_idx_sel < len(self.master_app.clientes)):
-            messagebox.showwarning("Atención", "Selecciona un cliente de la lista.", parent=self)
+            messagebox.showwarning("Atencion", "Selecciona un cliente de la lista.", parent=self)
             return
 
         cli = self.master_app.clientes[self.cliente_idx_sel]
@@ -619,12 +624,12 @@ class GestionClientesModal(ctk.CTkToplevel):
         self.ent_domicilio.delete(0, "end")
 
 
-# --- MODAL: GESTIÓN DE PRODUCTOS ---
+# --- MODAL: GESTION DE PRODUCTOS ---
 class GestionProductosModal(ctk.CTkToplevel):
     def __init__(self, master):
         super().__init__(master)
         self.master_app = master
-        self.title("Gestión de Productos")
+        self.title("Gestion de Productos")
         self.geometry("620x390")
         self.grab_set()
 
@@ -649,7 +654,7 @@ class GestionProductosModal(ctk.CTkToplevel):
 
         ctk.CTkLabel(frame_form, text="Datos del Producto", font=("Helvetica", 13, "bold")).pack(pady=5)
 
-        self.ent_desc = ctk.CTkEntry(frame_form, placeholder_text="Descripción / Nombre")
+        self.ent_desc = ctk.CTkEntry(frame_form, placeholder_text="Descripcion / Nombre")
         self.ent_desc.pack(fill="x", padx=10, pady=6)
 
         self.ent_precio = ctk.CTkEntry(frame_form, placeholder_text="Precio base (€)")
@@ -706,7 +711,7 @@ class GestionProductosModal(ctk.CTkToplevel):
             if not desc or precio < 0 or iva < 0:
                 raise ValueError
         except ValueError:
-            messagebox.showerror("Error", "Comprueba que la descripción exista y que el precio e IVA sean válidos.", parent=self)
+            messagebox.showerror("Error", "Comprueba que la descripcion exista y que el precio e IVA sean validos.", parent=self)
             return
 
         nuevo_dato = {"desc": desc, "precio": precio, "iva": iva}
@@ -720,11 +725,11 @@ class GestionProductosModal(ctk.CTkToplevel):
             self.master_app.actualizar_combos()
             self.recargar_lista()
             self.limpiar_form()
-            messagebox.showinfo("Éxito", f"Producto '{desc}' guardado en productos.json.", parent=self)
+            messagebox.showinfo("Exito", f"Producto '{desc}' guardado en productos.json.", parent=self)
 
     def eliminar_producto(self):
         if self.prod_idx_sel is None or not (0 <= self.prod_idx_sel < len(self.master_app.productos)):
-            messagebox.showwarning("Atención", "Selecciona un producto de la lista.", parent=self)
+            messagebox.showwarning("Atencion", "Selecciona un producto de la lista.", parent=self)
             return
 
         prod = self.master_app.productos[self.prod_idx_sel]
@@ -742,11 +747,11 @@ class GestionProductosModal(ctk.CTkToplevel):
         self.ent_iva.delete(0, "end")
 
 
-# --- APLICACIÓN PRINCIPAL ---
+# --- APLICACION PRINCIPAL ---
 class FacturadorApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title(f"Facturación Obrador Belis - v{VERSION_ACTUAL}")
+        self.title(f"Facturacion Obrador Belis - v{VERSION_ACTUAL}")
         self.geometry("1040x640")
         self.minsize(940, 560)
 
@@ -760,7 +765,7 @@ class FacturadorApp(ctk.CTk):
         # Cargar datos desde los archivos JSON
         self.clientes = cargar_json(CLIENTES_FILE, [{"nombre": "Cliente Mostrador", "nif": "", "domicilio": ""}])
         self.productos = cargar_json(PRODUCTOS_FILE, [
-            {"desc": "Café con Leche", "precio": 1.50, "iva": 10},
+            {"desc": "Cafe con Leche", "precio": 1.50, "iva": 10},
             {"desc": "Tarta de Queso", "precio": 4.00, "iva": 10},
             {"desc": "Refresco", "precio": 2.00, "iva": 21}
         ])
@@ -784,7 +789,7 @@ class FacturadorApp(ctk.CTk):
         left_panel = ctk.CTkFrame(self, corner_radius=10)
         left_panel.pack(side="left", fill="y", padx=10, pady=10)
 
-        ctk.CTkLabel(left_panel, text="Opciones de Emisión", font=("Helvetica", 16, "bold")).pack(pady=10)
+        ctk.CTkLabel(left_panel, text="Opciones de Emision", font=("Helvetica", 16, "bold")).pack(pady=10)
 
         self.var_es_factura = tk.BooleanVar(value=True)
         self.chk_tipo = ctk.CTkSwitch(
@@ -799,14 +804,14 @@ class FacturadorApp(ctk.CTk):
         self.txt_emisor = ctk.CTkTextbox(left_panel, height=75, width=260)
         self.txt_emisor.insert(
             "1.0", 
-            "Obrador Belis (Belén Contrera Tubio)\n"
+            "Obrador Belis (Belen Contrera Tubio)\n"
             "NIF: 28923218M\n"
             "Nº Reg. Sanitario: 41930-00511\n"
             "Domicilio: Avenida Aljarafe 43, Bormujos"
         )
         self.txt_emisor.pack(padx=15, pady=4)
 
-        # Cliente + Gestión
+        # Cliente + Gestion
         ctk.CTkLabel(left_panel, text="Cliente:", font=("Helvetica", 12, "bold")).pack(anchor="w", padx=15, pady=(8, 0))
         cli_box = ctk.CTkFrame(left_panel, fg_color="transparent")
         cli_box.pack(fill="x", padx=15, pady=4)
@@ -817,7 +822,7 @@ class FacturadorApp(ctk.CTk):
         btn_gest_cli = ctk.CTkButton(cli_box, text="⚙", width=35, command=self.abrir_gestion_clientes)
         btn_gest_cli.pack(side="left")
 
-        # Producto + Gestión
+        # Producto + Gestion
         ctk.CTkLabel(left_panel, text="Añadir Producto:", font=("Helvetica", 12, "bold")).pack(anchor="w", padx=15, pady=(10, 0))
         prod_box = ctk.CTkFrame(left_panel, fg_color="transparent")
         prod_box.pack(fill="x", padx=15, pady=4)
@@ -844,7 +849,7 @@ class FacturadorApp(ctk.CTk):
         btn_add = ctk.CTkButton(left_panel, text="+ Añadir a Lista", command=self.agregar_item, fg_color="#2b7a78", hover_color="#17252a")
         btn_add.pack(padx=15, pady=10, fill="x")
 
-        # Botón para forzar comprobación manual de actualización
+        # Boton para forzar comprobacion manual de actualizacion
         self.btn_check_update = ctk.CTkButton(
             left_panel,
             text="🔄 Buscar actualizaciones",
@@ -856,7 +861,7 @@ class FacturadorApp(ctk.CTk):
         )
         self.btn_check_update.pack(side="bottom", padx=15, pady=(0, 15), fill="x")
 
-        # Botón PDF Principal
+        # Boton PDF Principal
         self.btn_pdf = ctk.CTkButton(
             left_panel, 
             text="Generar PDF", 
@@ -875,7 +880,7 @@ class FacturadorApp(ctk.CTk):
         self.lbl_num_doc = ctk.CTkLabel(right_panel, text=f"Documento actual: {self.get_num_factura()}", font=("Helvetica", 15, "bold"))
         self.lbl_num_doc.pack(pady=10)
 
-        self.frame_items = ctk.CTkScrollableFrame(right_panel, label_text="Artículos del Documento")
+        self.frame_items = ctk.CTkScrollableFrame(right_panel, label_text="Articulos del Documento")
         self.frame_items.pack(fill="both", expand=True, padx=10, pady=5)
 
         totales_frame = ctk.CTkFrame(right_panel, fg_color="transparent")
@@ -947,7 +952,7 @@ class FacturadorApp(ctk.CTk):
             self.entry_cant.delete(0, "end")
             self.entry_cant.insert(0, "1")
         except ValueError:
-            messagebox.showerror("Error", "Comprueba que la cantidad, el precio y el IVA sean números válidos.")
+            messagebox.showerror("Error", "Comprueba que la cantidad, el precio y el IVA sean numeros validos.")
 
     def sumar_item(self, idx):
         if 0 <= idx < len(self.items_factura):
@@ -1032,7 +1037,7 @@ class FacturadorApp(ctk.CTk):
 
     def generar_documento(self):
         if not self.items_factura:
-            messagebox.showwarning("Atención", "Añade al menos un producto a la lista.")
+            messagebox.showwarning("Atencion", "Añade al menos un producto a la lista.")
             return
 
         es_factura = self.var_es_factura.get()
@@ -1063,7 +1068,7 @@ class FacturadorApp(ctk.CTk):
                 self.lbl_num_doc.configure(text=f"Documento actual: {self.get_num_factura()}")
 
             self.limpiar_items()
-            messagebox.showinfo("Éxito", f"Documento generado: {nombre_salida}")
+            messagebox.showinfo("Exito", f"Documento generado: {nombre_salida}")
             
             if sys.platform == "win32":
                 os.startfile(ruta_salida)
