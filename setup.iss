@@ -28,9 +28,6 @@ Source: "fuentes-letra\*"; DestDir: "{app}\fuentes-letra"; Flags: ignoreversion 
 [Icons]
 Name: "{autodesktop}\Facturador Obrador Belis"; Filename: "{app}\{code:GetTargetExeName}"; IconFilename: "{app}\fuentes-letra\icono.ico"; Tasks: desktopicon
 
-[Run]
-Filename: "{app}\{code:GetTargetExeName}"; WorkingDir: "{app}"; Flags: nowait
-
 [Code]
 function GetTargetExeName(Param: String): String;
 var

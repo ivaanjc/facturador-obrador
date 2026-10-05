@@ -17,7 +17,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.1.9"
+VERSION_ACTUAL = "1.2.0"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -302,43 +302,50 @@ class VentanaDescarga(ctk.CTkToplevel):
             self.after(0, self._mostrar_error, str(e))
 
     def _finalizar_y_ejecutar(self, ruta_instalador):
-        self.lbl_estado.configure(text="Instalando y reiniciando...")
-        self.lbl_aviso.configure(text="Cerrando aplicación e iniciando nueva versión...")
-        
-        # Rutas absolutas y limpias
-        ruta_exe_actual = os.path.normpath(sys.executable)
-        directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_actual))
-        nombre_exe_actual = os.path.basename(ruta_exe_actual)
-        pid_actual = os.getpid()
+            self.lbl_estado.configure(text="Instalando y reiniciando...")
+            self.lbl_aviso.configure(text="Cerrando aplicación e iniciando nueva versión...")
+            
+            # Rutas absolutas y limpias
+            ruta_exe_actual = os.path.normpath(sys.executable)
+            directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_actual))
+            nombre_exe_actual = os.path.basename(ruta_exe_actual)
+            pid_actual = os.getpid()
 
-        temp_dir = os.environ.get("TEMP", directorio_actual)
-        updater_bat = os.path.join(temp_dir, "ejecutar_update.bat")
+            temp_dir = os.environ.get("TEMP", directorio_actual)
+            updater_bat = os.path.join(temp_dir, "ejecutar_update.bat")
 
-        # Script BAT sin sangrías internas para evitar sintaxis inválida en cmd.exe
-        contenido_bat = (
-            "@echo off\r\n"
-            ":wait_proc\r\n"
-            f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
-            "if not errorlevel 1 (\r\n"
-            "    timeout /t 1 /nobreak >nul\r\n"
-            "    goto wait_proc\r\n"
-            ")\r\n"
-            "timeout /t 1 /nobreak >nul\r\n"
-            f'"{ruta_instalador}" /DIR="{directorio_actual}" /EXENAME="{nombre_exe_actual}" /SILENT /CLOSEAPPLICATIONS\r\n'
-            'del "%~f0"\r\n'
-        )
-        
-        with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
-            f.write(contenido_bat)
+            # 1. Espera a que el proceso de la app vieja muera por completo
+            # 2. Ejecuta el instalador silencioso y ESPERA a que termine (/WAIT)
+            # 3. Hace una pequeña pausa de 1 segundo para liberar el entorno
+            # 4. Inicia el nuevo .exe desde su propia carpeta (cd /d) de forma limpia e independiente
+            contenido_bat = (
+                "@echo off\r\n"
+                ":wait_proc\r\n"
+                f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
+                "if not errorlevel 1 (\r\n"
+                "    timeout /t 1 /nobreak >nul\r\n"
+                "    goto wait_proc\r\n"
+                ")\r\n"
+                "timeout /t 1 /nobreak >nul\r\n"
+                f'start /wait "" "{ruta_instalador}" /DIR="{directorio_actual}" /EXENAME="{nombre_exe_actual}" /SILENT /CLOSEAPPLICATIONS\r\n'
+                "timeout /t 1 /nobreak >nul\r\n"
+                f'cd /d "{directorio_actual}"\r\n'
+                f'start "" "{nombre_exe_actual}"\r\n'
+                'del "%~f0"\r\n'
+            )
+            
+            with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
+                f.write(contenido_bat)
 
-        subprocess.Popen(
-            ["cmd.exe", "/c", updater_bat],
-            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-            close_fds=True
-        )
+            # Lanza el script desacoplado de Windows
+            subprocess.Popen(
+                ["cmd.exe", "/c", updater_bat],
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                close_fds=True
+            )
 
-        self.master.destroy()
-        sys.exit(0)
+            self.master.destroy()
+            sys.exit(0)
 
     def _actualizar_ui(self, porcentaje, texto):
         self.progress_bar.set(porcentaje)
