@@ -7,6 +7,7 @@ import threading
 import subprocess
 import urllib.request
 import tkinter as tk
+import ssl
 from tkinter import messagebox
 import customtkinter as ctk
 from fpdf import FPDF
@@ -22,6 +23,16 @@ URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrad
 # Configuración visual moderna
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
+
+# --- CONTEXTO SSL TOLERANTE ---
+def get_ssl_context():
+    """Genera un contexto SSL compatible para evitar errores de certificados en equipos cliente."""
+    try:
+        ctx = ssl.create_default_context()
+        return ctx
+    except Exception:
+        pass
+    return ssl._create_unverified_context()
 
 # --- RESOLUCIÓN DE RUTAS ---
 if getattr(sys, 'frozen', False):
@@ -145,7 +156,8 @@ class VentanaDescarga(ctk.CTkToplevel):
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
             )
 
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            # Uso del contexto SSL tolerante para evitar fallos de certificados en el cliente
+            with urllib.request.urlopen(req, timeout=60, context=get_ssl_context()) as resp:
                 total_bytes = resp.getheader('Content-Length')
                 total_bytes = int(total_bytes) if total_bytes else None
 
@@ -182,48 +194,44 @@ class VentanaDescarga(ctk.CTkToplevel):
             self.after(0, self._mostrar_error, str(e))
 
     def _finalizar_y_ejecutar(self, ruta_instalador):
-            self.lbl_estado.configure(text="Instalando y reiniciando...")
-            
-            # Rutas absolutas y limpias
-            ruta_exe_actual = os.path.normpath(sys.executable)
-            directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_actual))
-            nombre_exe_actual = os.path.basename(ruta_exe_actual)
-            pid_actual = os.getpid()
+        self.lbl_estado.configure(text="Instalando y reiniciando...")
+        
+        # Rutas absolutas y limpias
+        ruta_exe_actual = os.path.normpath(sys.executable)
+        directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_actual))
+        nombre_exe_actual = os.path.basename(ruta_exe_actual)
+        pid_actual = os.getpid()
 
-            temp_dir = os.environ.get("TEMP", directorio_actual)
-            updater_bat = os.path.join(temp_dir, "ejecutar_update.bat")
+        temp_dir = os.environ.get("TEMP", directorio_actual)
+        updater_bat = os.path.join(temp_dir, "ejecutar_update.bat")
 
-            # Script BAT que:
-            # 1. Espera a que el proceso actual (por PID) muera del todo
-            # 2. Lanza el instalador sobreescribiendo en la ruta exacta
-            # 3. Se autoelimina al terminar
-            contenido_bat = f"""@echo off
-    :wait_proc
-    tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL
-    if not errorlevel 1 (
-        timeout /t 1 /nobreak >nul
-        goto wait_proc
-    )
+        # Script BAT sin sangrías internas para evitar sintaxis inválida en cmd.exe
+        contenido_bat = (
+            "@echo off\r\n"
+            ":wait_proc\r\n"
+            f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
+            "if not errorlevel 1 (\r\n"
+            "    timeout /t 1 /nobreak >nul\r\n"
+            "    goto wait_proc\r\n"
+            ")\r\n"
+            "timeout /t 1 /nobreak >nul\r\n"
+            f'"{ruta_instalador}" /DIR="{directorio_actual}" /EXENAME="{nombre_exe_actual}" /SILENT /CLOSEAPPLICATIONS\r\n'
+            'del "%~f0"\r\n'
+        )
+        
+        with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
+            f.write(contenido_bat)
 
-    timeout /t 1 /nobreak >nul
+        # Lanza el script en segundo plano sin ventana visible
+        subprocess.Popen(
+            ["cmd.exe", "/c", updater_bat],
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            close_fds=True
+        )
 
-    "{ruta_instalador}" /DIR="{directorio_actual}" /EXENAME="{nombre_exe_actual}" /SILENT /CLOSEAPPLICATIONS
-
-    del "%~f0"
-    """
-            with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
-                f.write(contenido_bat)
-
-            # Lanza el script en segundo plano sin ventana visible
-            subprocess.Popen(
-                ["cmd.exe", "/c", updater_bat],
-                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-                close_fds=True
-            )
-
-            # Destruir la interfaz y salir de inmediato
-            self.master.destroy()
-            sys.exit(0)
+        # Destruir la interfaz y salir de inmediato
+        self.master.destroy()
+        sys.exit(0)
 
     def _actualizar_ui(self, porcentaje, texto):
         self.progress_bar.set(porcentaje)
@@ -264,7 +272,8 @@ def comprobar_actualizacion(parent=None, manual=False):
             }
         )
 
-        with urllib.request.urlopen(req, timeout=5) as response:
+        # Uso del contexto SSL tolerante para leer el JSON de versión
+        with urllib.request.urlopen(req, timeout=10, context=get_ssl_context()) as response:
             data = json.loads(response.read().decode('utf-8'))
             version_remota = data.get("version", "").strip()
             url_instalador = data.get("url")
