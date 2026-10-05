@@ -21,7 +21,6 @@ Name: "desktopicon"; Description: "Crear acceso directo en el Escritorio"; Group
 [Files]
 ; Solo 'ignoreversion': fuerza la sobrescritura directa en caliente
 Source: "dist\facturador2026.exe"; DestDir: "{app}"; DestName: "{code:GetTargetExeName}"; Flags: ignoreversion
-Source: "redist\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 ; Fuentes, logo e icono
 Source: "fuentes-letra\*"; DestDir: "{app}\fuentes-letra"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -31,7 +30,6 @@ Name: "{autodesktop}\Facturador Obrador Belis"; Filename: "{app}\{code:GetTarget
 
 [Run]
 Filename: "{app}\{code:GetTargetExeName}"; WorkingDir: "{app}"; Flags: nowait
-Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /passive /norestart"; StatusMsg: "Instalando componentes necesarios del sistema..."; Flags: waituntilterminated
 
 [Code]
 function GetTargetExeName(Param: String): String;

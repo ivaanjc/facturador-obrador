@@ -16,6 +16,8 @@ echo [1/5] Compilando con PyInstaller...
 pyinstaller --noconsole --onefile --clean ^
     --icon "fuentes-letra\icono.ico" ^
     --add-data "fuentes-letra;fuentes-letra" ^
+    --add-binary "%LOCALAPPDATA%\Programs\Python\Python312\vcruntime140.dll;." ^
+    --add-binary "%LOCALAPPDATA%\Programs\Python\Python312\vcruntime140_1.dll;." ^
     --collect-all customtkinter ^
     facturador2026.py
 
