@@ -17,7 +17,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.1.4"
+VERSION_ACTUAL = "1.1.6"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -26,13 +26,11 @@ ctk.set_default_color_theme("blue")
 
 # --- CONTEXTO SSL TOLERANTE ---
 def get_ssl_context():
-    """Genera un contexto SSL compatible para evitar errores de certificados en equipos cliente."""
-    try:
-        ctx = ssl.create_default_context()
-        return ctx
-    except Exception:
-        pass
-    return ssl._create_unverified_context()
+    """Genera un contexto SSL sin validación estricta para garantizar conexión en cualquier PC."""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 # --- RESOLUCIÓN DE RUTAS ---
 if getattr(sys, 'frozen', False):
@@ -103,14 +101,112 @@ def parse_version(v_str):
     except Exception:
         return (0, 0, 0)
 
+# --- MODAL MODERNO: NOTIFICACIÓN DE ACTUALIZACIÓN DISPONIBLE ---
+class VentanaAvisoActualizacion(ctk.CTkToplevel):
+    def __init__(self, master, version_remota, url_instalador):
+        super().__init__(master)
+        self.master = master
+        self.version_remota = version_remota
+        self.url_instalador = url_instalador
+
+        self.title("Actualización disponible")
+        self.geometry("460x320")
+        self.resizable(False, False)
+        self.grab_set()
+
+        if os.path.exists(ICO_FILE):
+            try:
+                self.iconbitmap(ICO_FILE)
+            except Exception:
+                pass
+
+        # Centrar respecto a la ventana principal
+        self.update_idletasks()
+        x = master.winfo_x() + (master.winfo_width() // 2) - 230
+        y = master.winfo_y() + (master.winfo_height() // 2) - 160
+        self.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+        # Contenedor principal con margen
+        container = ctk.CTkFrame(self, corner_radius=15, fg_color=("gray95", "gray14"))
+        container.pack(fill="both", expand=True, padx=15, pady=15)
+
+        # Encabezado visual
+        lbl_icono = ctk.CTkLabel(container, text="🚀", font=("Helvetica", 34))
+        lbl_icono.pack(pady=(12, 0))
+
+        lbl_titulo = ctk.CTkLabel(
+            container, 
+            text="¡Nueva versión disponible!", 
+            font=("Helvetica", 16, "bold")
+        )
+        lbl_titulo.pack(pady=(2, 10))
+
+        # Tarjeta informativa de versiones
+        card = ctk.CTkFrame(container, corner_radius=10, fg_color=("gray88", "gray20"))
+        card.pack(fill="x", padx=20, pady=5)
+
+        fila_v_actual = ctk.CTkFrame(card, fg_color="transparent")
+        fila_v_actual.pack(fill="x", padx=15, pady=(8, 2))
+        ctk.CTkLabel(fila_v_actual, text="Versión instalada:", font=("Helvetica", 12)).pack(side="left")
+        ctk.CTkLabel(fila_v_actual, text=f"v{VERSION_ACTUAL}", font=("Helvetica", 12, "bold"), text_color="gray50").pack(side="right")
+
+        fila_v_nueva = ctk.CTkFrame(card, fg_color="transparent")
+        fila_v_nueva.pack(fill="x", padx=15, pady=(2, 8))
+        ctk.CTkLabel(fila_v_nueva, text="Nueva versión:", font=("Helvetica", 12)).pack(side="left")
+        ctk.CTkLabel(fila_v_nueva, text=f"v{self.version_remota}", font=("Helvetica", 13, "bold"), text_color=("#1976d2", "#42a5f5")).pack(side="right")
+
+        lbl_sub = ctk.CTkLabel(
+            container, 
+            text="La actualización se instalará automáticamente sin tocar tus datos.",
+            font=("Helvetica", 11),
+            text_color=("gray40", "gray65")
+        )
+        lbl_sub.pack(pady=(8, 12))
+
+        # Botones de acción
+        btn_frame = ctk.CTkFrame(container, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=(0, 10))
+
+        btn_cancelar = ctk.CTkButton(
+            btn_frame, 
+            text="Más tarde", 
+            width=110,
+            fg_color="transparent",
+            hover_color=("gray80", "gray25"),
+            text_color=("gray20", "gray85"),
+            border_width=1,
+            border_color=("gray70", "gray40"),
+            command=self.destroy
+        )
+        btn_cancelar.pack(side="left", padx=(0, 10), fill="x", expand=True)
+
+        btn_actualizar = ctk.CTkButton(
+            btn_frame, 
+            text="Actualizar ahora", 
+            width=150,
+            font=("Helvetica", 12, "bold"),
+            fg_color="#2b7a78", 
+            hover_color="#17252a",
+            command=self._iniciar_descarga
+        )
+        btn_actualizar.pack(side="right", fill="x", expand=True)
+
+    def _iniciar_descarga(self):
+        url = self.url_instalador
+        master = self.master
+        self.destroy()
+        VentanaDescarga(master, url)
+
+
+# --- VENTANA MODERNA DE PROGRESO DE DESCARGA ---
 class VentanaDescarga(ctk.CTkToplevel):
     def __init__(self, master, url_instalador):
         super().__init__(master)
         self.master = master
         self.url_instalador = url_instalador
         
-        self.title("Descargando actualización")
-        self.geometry("420x180")
+        self.title("Actualizando Facturador")
+        self.geometry("450x220")
         self.resizable(False, False)
         self.grab_set()
 
@@ -121,27 +217,39 @@ class VentanaDescarga(ctk.CTkToplevel):
                 pass
 
         self.update_idletasks()
-        x = master.winfo_x() + (master.winfo_width() // 2) - 210
-        y = master.winfo_y() + (master.winfo_height() // 2) - 90
+        x = master.winfo_x() + (master.winfo_width() // 2) - 225
+        y = master.winfo_y() + (master.winfo_height() // 2) - 110
         self.geometry(f"+{max(0, x)}+{max(0, y)}")
 
-        self.lbl_estado = ctk.CTkLabel(
-            self, 
-            text="Conectando con el servidor...", 
-            font=("Helvetica", 13, "bold")
-        )
-        self.lbl_estado.pack(pady=(20, 10))
+        container = ctk.CTkFrame(self, corner_radius=15, fg_color=("gray95", "gray14"))
+        container.pack(fill="both", expand=True, padx=15, pady=15)
 
-        self.progress_bar = ctk.CTkProgressBar(self, width=340)
+        self.lbl_estado = ctk.CTkLabel(
+            container, 
+            text="Conectando con el servidor...", 
+            font=("Helvetica", 14, "bold")
+        )
+        self.lbl_estado.pack(pady=(18, 12))
+
+        self.progress_bar = ctk.CTkProgressBar(container, width=370, height=12, corner_radius=6)
         self.progress_bar.set(0)
-        self.progress_bar.pack(pady=10)
+        self.progress_bar.pack(pady=6)
 
         self.lbl_detalles = ctk.CTkLabel(
-            self, 
+            container, 
             text="0.00 MB / 0.00 MB (0%)", 
-            font=("Helvetica", 11)
+            font=("Helvetica", 11),
+            text_color=("gray40", "gray60")
         )
-        self.lbl_detalles.pack(pady=(0, 15))
+        self.lbl_detalles.pack(pady=(4, 10))
+
+        self.lbl_aviso = ctk.CTkLabel(
+            container,
+            text="Por favor, espera mientras se descarga el instalador...",
+            font=("Helvetica", 10),
+            text_color="gray50"
+        )
+        self.lbl_aviso.pack(pady=(0, 10))
 
         self.protocol("WM_DELETE_WINDOW", lambda: None)
         threading.Thread(target=self._descargar_hilo, daemon=True).start()
@@ -156,7 +264,7 @@ class VentanaDescarga(ctk.CTkToplevel):
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
             )
 
-            # Uso del contexto SSL tolerante para evitar fallos de certificados en el cliente
+            # Uso del contexto SSL permisivo para evitar bloqueos por certificados en equipos cliente
             with urllib.request.urlopen(req, timeout=60, context=get_ssl_context()) as resp:
                 total_bytes = resp.getheader('Content-Length')
                 total_bytes = int(total_bytes) if total_bytes else None
@@ -195,6 +303,7 @@ class VentanaDescarga(ctk.CTkToplevel):
 
     def _finalizar_y_ejecutar(self, ruta_instalador):
         self.lbl_estado.configure(text="Instalando y reiniciando...")
+        self.lbl_aviso.configure(text="Cerrando aplicación e iniciando nueva versión...")
         
         # Rutas absolutas y limpias
         ruta_exe_actual = os.path.normpath(sys.executable)
@@ -222,14 +331,12 @@ class VentanaDescarga(ctk.CTkToplevel):
         with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
             f.write(contenido_bat)
 
-        # Lanza el script en segundo plano sin ventana visible
         subprocess.Popen(
             ["cmd.exe", "/c", updater_bat],
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
             close_fds=True
         )
 
-        # Destruir la interfaz y salir de inmediato
         self.master.destroy()
         sys.exit(0)
 
@@ -238,15 +345,11 @@ class VentanaDescarga(ctk.CTkToplevel):
         self.lbl_estado.configure(text="Descargando actualización...")
         self.lbl_detalles.configure(text=texto)
 
-    def _actualizar_ui_indeterminada(self, texto):
-        self.lbl_estado.configure(text="Descargando actualización...")
-        self.lbl_detalles.configure(text=texto)
-
     def _mostrar_error(self, error_msg):
         self.destroy()
         messagebox.showerror(
             "Fallo al actualizar", 
-            f"No se pudo completar la actualización:\n{error_msg}", 
+            f"No se pudo completar la actualización:\n{error_msg}",
             parent=self.master
         )
 
@@ -272,22 +375,15 @@ def comprobar_actualizacion(parent=None, manual=False):
             }
         )
 
-        # Uso del contexto SSL tolerante para leer el JSON de versión
+        # Conexión con contexto SSL permisivo
         with urllib.request.urlopen(req, timeout=10, context=get_ssl_context()) as response:
             data = json.loads(response.read().decode('utf-8'))
             version_remota = data.get("version", "").strip()
             url_instalador = data.get("url")
 
         if version_remota and parse_version(version_remota) > parse_version(VERSION_ACTUAL):
-            resp = messagebox.askyesno(
-                "Actualización disponible",
-                f"Hay una nueva versión disponible ({version_remota}).\n"
-                f"Versión actual: {VERSION_ACTUAL}\n\n"
-                "¿Deseas descargar e instalar la actualización ahora?",
-                parent=parent
-            )
-            if resp:
-                VentanaDescarga(parent, url_instalador)
+            # Modal moderno de actualización
+            VentanaAvisoActualizacion(parent, version_remota, url_instalador)
         else:
             if manual:
                 messagebox.showinfo(
@@ -606,7 +702,7 @@ class GestionProductosModal(ctk.CTkToplevel):
     def guardar_producto(self):
         desc = self.ent_desc.get().strip()
         try:
-            precio = float(self.ent_precio.get().strip().replace(',', '.'))
+            precio = float(self.entry_precio.get().strip().replace(',', '.'))
             iva = int(self.ent_iva.get().strip())
             if not desc or precio < 0 or iva < 0:
                 raise ValueError
