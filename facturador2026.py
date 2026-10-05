@@ -17,7 +17,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.2.0"
+VERSION_ACTUAL = "1.2.1"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
@@ -302,10 +302,9 @@ class VentanaDescarga(ctk.CTkToplevel):
             self.after(0, self._mostrar_error, str(e))
 
     def _finalizar_y_ejecutar(self, ruta_instalador):
-            self.lbl_estado.configure(text="Instalando y reiniciando...")
-            self.lbl_aviso.configure(text="Cerrando aplicación e iniciando nueva versión...")
+            self.lbl_estado.configure(text="Instalando...")
+            self.lbl_aviso.configure(text="Cerrando aplicación para aplicar la actualización...")
             
-            # Rutas absolutas y limpias
             ruta_exe_actual = os.path.normpath(sys.executable)
             directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_actual))
             nombre_exe_actual = os.path.basename(ruta_exe_actual)
@@ -314,10 +313,7 @@ class VentanaDescarga(ctk.CTkToplevel):
             temp_dir = os.environ.get("TEMP", directorio_actual)
             updater_bat = os.path.join(temp_dir, "ejecutar_update.bat")
 
-            # 1. Espera a que el proceso de la app vieja muera por completo
-            # 2. Ejecuta el instalador silencioso y ESPERA a que termine (/WAIT)
-            # 3. Hace una pequeña pausa de 1 segundo para liberar el entorno
-            # 4. Inicia el nuevo .exe desde su propia carpeta (cd /d) de forma limpia e independiente
+            # Se ejecuta sin /SILENT para que aparezca la ventana con la casilla final de "¿Desea ejecutar el programa?"
             contenido_bat = (
                 "@echo off\r\n"
                 ":wait_proc\r\n"
@@ -327,17 +323,13 @@ class VentanaDescarga(ctk.CTkToplevel):
                 "    goto wait_proc\r\n"
                 ")\r\n"
                 "timeout /t 1 /nobreak >nul\r\n"
-                f'start /wait "" "{ruta_instalador}" /DIR="{directorio_actual}" /EXENAME="{nombre_exe_actual}" /SILENT /CLOSEAPPLICATIONS\r\n'
-                "timeout /t 1 /nobreak >nul\r\n"
-                f'cd /d "{directorio_actual}"\r\n'
-                f'start "" "{nombre_exe_actual}"\r\n'
-                'del "%~f0"\r\n'
+                f'call "{ruta_instalador}" /DIR="{directorio_actual}" /EXENAME="{nombre_exe_actual}" /CLOSEAPPLICATIONS\r\n'
+                '(goto) 2>nul & del "%~f0"\r\n'
             )
             
             with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
                 f.write(contenido_bat)
 
-            # Lanza el script desacoplado de Windows
             subprocess.Popen(
                 ["cmd.exe", "/c", updater_bat],
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
