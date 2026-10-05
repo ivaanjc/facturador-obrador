@@ -17,7 +17,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.2.2"
+VERSION_ACTUAL = "1.2.3"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuracion visual moderna
@@ -303,47 +303,70 @@ class VentanaDescarga(ctk.CTkToplevel):
             self.after(0, self._mostrar_error, str(e))
 
     def _finalizar_y_reemplazar(self, ruta_temporal_exe):
-        self.lbl_estado.configure(text="Aplicando actualizacion...")
-        self.lbl_aviso.configure(text="Sustituyendo ejecutable y reiniciando...")
+            self.lbl_estado.configure(text="Aplicando actualización...")
+            self.lbl_aviso.configure(text="Sustituyendo ejecutable y reiniciando...")
 
-        ruta_exe_actual = os.path.normpath(sys.executable)
-        directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_actual))
-        pid_actual = os.getpid()
+            # 1. Obtener la ruta real del .exe en el disco (no la temporal de PyInstaller)
+            ruta_exe_real = ""
+            try:
+                import ctypes
+                buffer = ctypes.create_unicode_buffer(1024)
+                # GetModuleFileNameW(0) devuelve la ruta física del ejecutable principal del proceso
+                ctypes.windll.kernel32.GetModuleFileNameW(0, buffer, 1024)
+                ruta_exe_real = os.path.normpath(buffer.value)
+            except Exception:
+                pass
 
-        temp_dir = os.environ.get("TEMP", directorio_actual)
-        updater_bat = os.path.join(temp_dir, "reemplazar_update.bat")
+            # Si ctypes fallara o estuviera vacío, recurrir a sys.argv[0] y luego sys.executable
+            if not ruta_exe_real or not os.path.exists(ruta_exe_real):
+                if getattr(sys, 'frozen', False):
+                    ruta_exe_real = os.path.normpath(os.path.abspath(sys.argv[0]))
+                else:
+                    ruta_exe_real = os.path.normpath(sys.executable)
 
-        # Script por lotes que:
-        # 1. Espera a que el proceso actual libere el .exe
-        # 2. Reemplaza el ejecutable viejo por el nuevo directamente
-        # 3. Pregunta con una ventana de confirmacion de Windows si se desea abrir la aplicacion
-        contenido_bat = (
-            "@echo off\r\n"
-            ":wait_proc\r\n"
-            f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
-            "if not errorlevel 1 (\r\n"
-            "    timeout /t 1 /nobreak >nul\r\n"
-            "    goto wait_proc\r\n"
-            ")\r\n"
-            "timeout /t 1 /nobreak >nul\r\n"
-            f'move /y "{ruta_temporal_exe}" "{ruta_exe_actual}" >nul\r\n'
-            'mshta vbscript:Execute("resp=MsgBox(""La actualizacion se ha completado correctamente." & vbCrLf & ""¿Desea abrir el programa ahora?"", 36, ""Actualizacion completada""): If resp=6 Then CreateObject(""WScript.Shell"").Run """""'
-            f'{ruta_exe_actual}'
-            '""""": End If: close")\r\n'
-            '(goto) 2>nul & del "%~f0"\r\n'
-        )
+            # Si aún apunta a una subcarpeta temporal _MEI, forzamos a sys.argv[0]
+            if "_MEI" in ruta_exe_real:
+                ruta_exe_real = os.path.normpath(os.path.abspath(sys.argv[0]))
 
-        with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
-            f.write(contenido_bat)
+            directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_real))
+            pid_actual = os.getpid()
 
-        subprocess.Popen(
-            ["cmd.exe", "/c", updater_bat],
-            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-            close_fds=True
-        )
+            temp_dir = os.environ.get("TEMP", directorio_actual)
+            updater_bat = os.path.join(temp_dir, "reemplazar_update.bat")
 
-        self.master.destroy()
-        sys.exit(0)
+            # 2. Script por lotes que:
+            # - Espera a que el proceso actual finalice y libere el archivo .exe
+            # - Copia el archivo nuevo sobreescribiendo el .exe en su ubicación exacta
+            # - Elimina el temporal descargado
+            # - Pregunta si desea iniciar el programa ahora
+            contenido_bat = (
+                "@echo off\r\n"
+                ":wait_proc\r\n"
+                f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
+                "if not errorlevel 1 (\r\n"
+                "    timeout /t 1 /nobreak >nul\r\n"
+                "    goto wait_proc\r\n"
+                ")\r\n"
+                "timeout /t 1 /nobreak >nul\r\n"
+                f'copy /y "{ruta_temporal_exe}" "{ruta_exe_real}" >nul\r\n'
+                f'del "{ruta_temporal_exe}" >nul 2>nul\r\n'
+                'mshta vbscript:Execute("resp=MsgBox(""La actualización se ha completado correctamente." & vbCrLf & ""¿Desea abrir el programa ahora?"", 36, ""Actualización completada""): If resp=6 Then CreateObject(""WScript.Shell"").Run """""'
+                f'{ruta_exe_real}'
+                '""""": End If: close")\r\n'
+                '(goto) 2>nul & del "%~f0"\r\n'
+            )
+
+            with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
+                f.write(contenido_bat)
+
+            subprocess.Popen(
+                ["cmd.exe", "/c", updater_bat],
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                close_fds=True
+            )
+
+            self.master.destroy()
+            sys.exit(0)
 
     def _actualizar_ui(self, porcentaje, texto):
         self.progress_bar.set(porcentaje)
