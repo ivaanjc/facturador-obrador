@@ -16,7 +16,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.1.3"
+VERSION_ACTUAL = "1.1.4"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuración visual moderna
