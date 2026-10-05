@@ -17,7 +17,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.2.3"
+VERSION_ACTUAL = "1.2.4"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuracion visual moderna
@@ -157,7 +157,7 @@ class VentanaAvisoActualizacion(ctk.CTkToplevel):
 
         lbl_sub = ctk.CTkLabel(
             container, 
-            text="La actualizacion se instalara directamente sin modificar tus datos.",
+            text="La actualizacion se sobreescribira directamente en este archivo.",
             font=("Helvetica", 11),
             text_color=("gray40", "gray65")
         )
@@ -198,7 +198,7 @@ class VentanaAvisoActualizacion(ctk.CTkToplevel):
         VentanaDescarga(master, url)
 
 
-# --- VENTANA MODERNA DE PROGRESO DE DESCARGA DIRECTA ---
+# --- VENTANA DE PROGRESO Y REEMPLAZO DIRECTO EN DISCO ---
 class VentanaDescarga(ctk.CTkToplevel):
     def __init__(self, master, url_nuevo_exe):
         super().__init__(master)
@@ -245,7 +245,7 @@ class VentanaDescarga(ctk.CTkToplevel):
 
         self.lbl_aviso = ctk.CTkLabel(
             container,
-            text="Descargando la nueva version del programa...",
+            text="Descargando el ejecutable actualizado...",
             font=("Helvetica", 10),
             text_color="gray50"
         )
@@ -253,6 +253,35 @@ class VentanaDescarga(ctk.CTkToplevel):
 
         self.protocol("WM_DELETE_WINDOW", lambda: None)
         threading.Thread(target=self._descargar_hilo, daemon=True).start()
+
+    def _obtener_ruta_exe_real(self):
+        """Devuelve la ruta absoluta del .exe real (por ejemplo en el Escritorio), evitando carpetas temporales."""
+        ruta_encontrada = ""
+        
+        # 1. Intentar por Kernel32 GetModuleFileNameW (ruta nativa de proceso de Windows)
+        try:
+            import ctypes
+            buf = ctypes.create_unicode_buffer(1024)
+            ctypes.windll.kernel32.GetModuleFileNameW(0, buf, 1024)
+            if buf.value and os.path.exists(buf.value):
+                ruta_encontrada = os.path.normpath(buf.value)
+        except Exception:
+            pass
+
+        # 2. Si apunta a una carpeta temporal _MEI de PyInstaller o esta vacia, usar sys.argv[0]
+        if not ruta_encontrada or "_MEI" in ruta_encontrada:
+            if getattr(sys, 'frozen', False):
+                ruta_encontrada = os.path.normpath(os.path.abspath(sys.argv[0]))
+            else:
+                ruta_encontrada = os.path.normpath(os.path.abspath(__file__))
+
+        # 3. Comprobar sys.executable como ultimo recurso si no es temporal
+        if "_MEI" in ruta_encontrada:
+            posible_exe = os.path.normpath(sys.executable)
+            if "_MEI" not in posible_exe:
+                ruta_encontrada = posible_exe
+
+        return ruta_encontrada
 
     def _descargar_hilo(self):
         temp_dir = os.environ.get("TEMP", os.path.dirname(sys.executable))
@@ -264,7 +293,6 @@ class VentanaDescarga(ctk.CTkToplevel):
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
             )
 
-            # Uso del contexto SSL permisivo para evitar bloqueos por certificados en equipos cliente
             with urllib.request.urlopen(req, timeout=60, context=get_ssl_context()) as resp:
                 total_bytes = resp.getheader('Content-Length')
                 total_bytes = int(total_bytes) if total_bytes else None
@@ -287,7 +315,6 @@ class VentanaDescarga(ctk.CTkToplevel):
                             texto_progreso = f"{mb_actual:.2f} MB / {mb_total:.2f} MB ({int(porcentaje * 100)}%)"
                             self.after(0, self._actualizar_ui, porcentaje, texto_progreso)
 
-            # Comprobar que el archivo descargado sea un binario completo
             tamano_mb = os.path.getsize(ruta_temporal_exe) / (1024 * 1024)
             if tamano_mb < 3.0:
                 raise ValueError(f"Archivo incompleto o enlace incorrecto ({tamano_mb:.2f} MB).")
@@ -303,70 +330,49 @@ class VentanaDescarga(ctk.CTkToplevel):
             self.after(0, self._mostrar_error, str(e))
 
     def _finalizar_y_reemplazar(self, ruta_temporal_exe):
-            self.lbl_estado.configure(text="Aplicando actualización...")
-            self.lbl_aviso.configure(text="Sustituyendo ejecutable y reiniciando...")
+        self.lbl_estado.configure(text="Aplicando actualizacion...")
+        self.lbl_aviso.configure(text="Sobreescribiendo ejecutable y finalizando...")
 
-            # 1. Obtener la ruta real del .exe en el disco (no la temporal de PyInstaller)
-            ruta_exe_real = ""
-            try:
-                import ctypes
-                buffer = ctypes.create_unicode_buffer(1024)
-                # GetModuleFileNameW(0) devuelve la ruta física del ejecutable principal del proceso
-                ctypes.windll.kernel32.GetModuleFileNameW(0, buffer, 1024)
-                ruta_exe_real = os.path.normpath(buffer.value)
-            except Exception:
-                pass
+        ruta_exe_real = self._obtener_ruta_exe_real()
+        directorio_actual = os.path.dirname(ruta_exe_real)
+        pid_actual = os.getpid()
 
-            # Si ctypes fallara o estuviera vacío, recurrir a sys.argv[0] y luego sys.executable
-            if not ruta_exe_real or not os.path.exists(ruta_exe_real):
-                if getattr(sys, 'frozen', False):
-                    ruta_exe_real = os.path.normpath(os.path.abspath(sys.argv[0]))
-                else:
-                    ruta_exe_real = os.path.normpath(sys.executable)
+        temp_dir = os.environ.get("TEMP", directorio_actual)
+        updater_bat = os.path.join(temp_dir, "reemplazar_update.bat")
 
-            # Si aún apunta a una subcarpeta temporal _MEI, forzamos a sys.argv[0]
-            if "_MEI" in ruta_exe_real:
-                ruta_exe_real = os.path.normpath(os.path.abspath(sys.argv[0]))
+        # Script por lotes que:
+        # 1. Espera a que el proceso actual muera por PID
+        # 2. Copia y sobreescribe con /Y el .exe directamente en el Escritorio (o la ruta donde este)
+        # 3. Elimina el archivo temporal descargado
+        # 4. Pregunta mediante una ventana nativa de Windows si abrir el programa
+        contenido_bat = (
+            "@echo off\r\n"
+            ":wait_proc\r\n"
+            f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
+            "if not errorlevel 1 (\r\n"
+            "    timeout /t 1 /nobreak >nul\r\n"
+            "    goto wait_proc\r\n"
+            ")\r\n"
+            "timeout /t 1 /nobreak >nul\r\n"
+            f'copy /y "{ruta_temporal_exe}" "{ruta_exe_real}" >nul\r\n'
+            f'del "{ruta_temporal_exe}" >nul 2>nul\r\n'
+            'mshta vbscript:Execute("resp=MsgBox(""La actualizacion se ha completado correctamente." & vbCrLf & ""¿Desea abrir el programa ahora?"", 36, ""Actualizacion completada""): If resp=6 Then CreateObject(""WScript.Shell"").Run """""'
+            f'{ruta_exe_real}'
+            '""""": End If: close")\r\n'
+            '(goto) 2>nul & del "%~f0"\r\n'
+        )
 
-            directorio_actual = os.path.normpath(os.path.dirname(ruta_exe_real))
-            pid_actual = os.getpid()
+        with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
+            f.write(contenido_bat)
 
-            temp_dir = os.environ.get("TEMP", directorio_actual)
-            updater_bat = os.path.join(temp_dir, "reemplazar_update.bat")
+        subprocess.Popen(
+            ["cmd.exe", "/c", updater_bat],
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            close_fds=True
+        )
 
-            # 2. Script por lotes que:
-            # - Espera a que el proceso actual finalice y libere el archivo .exe
-            # - Copia el archivo nuevo sobreescribiendo el .exe en su ubicación exacta
-            # - Elimina el temporal descargado
-            # - Pregunta si desea iniciar el programa ahora
-            contenido_bat = (
-                "@echo off\r\n"
-                ":wait_proc\r\n"
-                f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
-                "if not errorlevel 1 (\r\n"
-                "    timeout /t 1 /nobreak >nul\r\n"
-                "    goto wait_proc\r\n"
-                ")\r\n"
-                "timeout /t 1 /nobreak >nul\r\n"
-                f'copy /y "{ruta_temporal_exe}" "{ruta_exe_real}" >nul\r\n'
-                f'del "{ruta_temporal_exe}" >nul 2>nul\r\n'
-                'mshta vbscript:Execute("resp=MsgBox(""La actualización se ha completado correctamente." & vbCrLf & ""¿Desea abrir el programa ahora?"", 36, ""Actualización completada""): If resp=6 Then CreateObject(""WScript.Shell"").Run """""'
-                f'{ruta_exe_real}'
-                '""""": End If: close")\r\n'
-                '(goto) 2>nul & del "%~f0"\r\n'
-            )
-
-            with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
-                f.write(contenido_bat)
-
-            subprocess.Popen(
-                ["cmd.exe", "/c", updater_bat],
-                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-                close_fds=True
-            )
-
-            self.master.destroy()
-            sys.exit(0)
+        self.master.destroy()
+        sys.exit(0)
 
     def _actualizar_ui(self, porcentaje, texto):
         self.progress_bar.set(porcentaje)
@@ -414,7 +420,7 @@ def comprobar_actualizacion(parent=None, manual=False):
         else:
             if manual:
                 messagebox.showinfo(
-                    "Sin actualizaciones",
+                    "Sin actualizaciones", 
                     f"Ya tienes la version mas reciente (v{VERSION_ACTUAL}).",
                     parent=parent
                 )
@@ -422,7 +428,7 @@ def comprobar_actualizacion(parent=None, manual=False):
     except Exception as e:
         if manual:
             messagebox.showerror(
-                "Error de conexion",
+                "Error de conexion", 
                 f"No se pudo comprobar el estado de actualizacion:\n{e}",
                 parent=parent
             )
