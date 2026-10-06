@@ -17,7 +17,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.2.4"
+VERSION_ACTUAL = "1.2.5"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 
 # Configuracion visual moderna
@@ -330,49 +330,50 @@ class VentanaDescarga(ctk.CTkToplevel):
             self.after(0, self._mostrar_error, str(e))
 
     def _finalizar_y_reemplazar(self, ruta_temporal_exe):
-        self.lbl_estado.configure(text="Aplicando actualizacion...")
-        self.lbl_aviso.configure(text="Sobreescribiendo ejecutable y finalizando...")
+            self.lbl_estado.configure(text="Aplicando actualizacion...")
+            self.lbl_aviso.configure(text="Sobreescribiendo ejecutable y finalizando...")
 
-        ruta_exe_real = self._obtener_ruta_exe_real()
-        directorio_actual = os.path.dirname(ruta_exe_real)
-        pid_actual = os.getpid()
+            ruta_exe_real = self._obtener_ruta_exe_real()
+            directorio_actual = os.path.dirname(ruta_exe_real)
+            pid_actual = os.getpid()
 
-        temp_dir = os.environ.get("TEMP", directorio_actual)
-        updater_bat = os.path.join(temp_dir, "reemplazar_update.bat")
+            temp_dir = os.environ.get("TEMP", directorio_actual)
+            updater_bat = os.path.join(temp_dir, "reemplazar_update.bat")
 
-        # Script por lotes que:
-        # 1. Espera a que el proceso actual muera por PID
-        # 2. Copia y sobreescribe con /Y el .exe directamente en el Escritorio (o la ruta donde este)
-        # 3. Elimina el archivo temporal descargado
-        # 4. Pregunta mediante una ventana nativa de Windows si abrir el programa
-        contenido_bat = (
-            "@echo off\r\n"
-            ":wait_proc\r\n"
-            f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
-            "if not errorlevel 1 (\r\n"
-            "    timeout /t 1 /nobreak >nul\r\n"
-            "    goto wait_proc\r\n"
-            ")\r\n"
-            "timeout /t 1 /nobreak >nul\r\n"
-            f'copy /y "{ruta_temporal_exe}" "{ruta_exe_real}" >nul\r\n'
-            f'del "{ruta_temporal_exe}" >nul 2>nul\r\n'
-            'mshta vbscript:Execute("resp=MsgBox(""La actualizacion se ha completado correctamente." & vbCrLf & ""¿Desea abrir el programa ahora?"", 36, ""Actualizacion completada""): If resp=6 Then CreateObject(""WScript.Shell"").Run """""'
-            f'{ruta_exe_real}'
-            '""""": End If: close")\r\n'
-            '(goto) 2>nul & del "%~f0"\r\n'
-        )
+            # Script por lotes que:
+            # 1. Espera a que el proceso actual muera por PID para liberar el archivo .exe bloqueado
+            # 2. Copia y sobreescribe con /Y el .exe directamente en su ruta original
+            # 3. Elimina el archivo temporal de descarga
+            # 4. Muestra un cuadro de confirmacion nativo (Si/No) preguntando si desea abrir el programa
+            contenido_bat = (
+                "@echo off\r\n"
+                ":wait_proc\r\n"
+                f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
+                "if not errorlevel 1 (\r\n"
+                "    timeout /t 1 /nobreak >nul\r\n"
+                "    goto wait_proc\r\n"
+                ")\r\n"
+                "timeout /t 1 /nobreak >nul\r\n"
+                f'copy /y "{ruta_temporal_exe}" "{ruta_exe_real}" >nul\r\n'
+                f'del "{ruta_temporal_exe}" >nul 2>nul\r\n'
+                'mshta vbscript:Execute("resp=MsgBox(""La actualizacion se ha completado correctamente." & vbCrLf & ""¿Desea abrir el programa ahora?"", 36, ""Actualizacion completada""): If resp=6 Then CreateObject(""WScript.Shell"").Run """""'
+                f'{ruta_exe_real}'
+                '""""": End If: close")\r\n'
+                '(goto) 2>nul & del "%~f0"\r\n'
+            )
 
-        with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
-            f.write(contenido_bat)
+            with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
+                f.write(contenido_bat)
 
-        subprocess.Popen(
-            ["cmd.exe", "/c", updater_bat],
-            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-            close_fds=True
-        )
+            # Lanzar el actualizador en segundo plano sin ventana de consola negra
+            subprocess.Popen(
+                ["cmd.exe", "/c", updater_bat],
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                close_fds=True
+            )
 
-        self.master.destroy()
-        sys.exit(0)
+            self.master.destroy()
+            sys.exit(0)
 
     def _actualizar_ui(self, porcentaje, texto):
         self.progress_bar.set(porcentaje)
