@@ -3,8 +3,7 @@ import sys
 import json
 import time
 import datetime
-import threading
-import subprocess
+import webbrowser
 import urllib.request
 import tkinter as tk
 import ssl
@@ -17,8 +16,9 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.2.5"
+VERSION_ACTUAL = "1.0.0"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
+URL_RELEASES_GITHUB = "https://github.com/ivaanjc/facturador-obrador/releases/latest/download/facturador2026.exe"
 
 # Configuracion visual moderna
 ctk.set_appearance_mode("System")
@@ -93,7 +93,7 @@ def guardar_json(ruta, datos):
         return False
 
 
-# --- LOGICA DE AUTO-ACTUALIZACION DIRECTA (.EXE) ---
+# --- LOGICA DE COMPROBACION DE VERSIONES ---
 def parse_version(v_str):
     try:
         limpio = v_str.strip().lstrip('v')
@@ -101,15 +101,21 @@ def parse_version(v_str):
     except Exception:
         return (0, 0, 0)
 
-# --- MODAL MODERNO: NOTIFICACION DE ACTUALIZACION DISPONIBLE ---
+
+# --- MODAL: NOTIFICACION DE ACTUALIZACION DISPONIBLE ---
 class VentanaAvisoActualizacion(ctk.CTkToplevel):
-    def __init__(self, master, version_remota, url_nuevo_exe):
+    def __init__(self, master, version_remota, url_destino=None):
         super().__init__(master)
         self.master = master
         self.version_remota = version_remota
-        self.url_nuevo_exe = url_nuevo_exe
+        
+        # Si la url en el JSON apunta al binario .exe o no existe, redirigir a la vista de releases
+        if not url_destino or url_destino.endswith(".exe"):
+            self.url_destino = URL_RELEASES_GITHUB
+        else:
+            self.url_destino = url_destino
 
-        self.title("Actualizacion disponible")
+        self.title("Actualización disponible")
         self.geometry("460x320")
         self.resizable(False, False)
         self.grab_set()
@@ -136,7 +142,7 @@ class VentanaAvisoActualizacion(ctk.CTkToplevel):
 
         lbl_titulo = ctk.CTkLabel(
             container, 
-            text="¡Nueva version disponible!", 
+            text="¡Nueva versión disponible!", 
             font=("Helvetica", 16, "bold")
         )
         lbl_titulo.pack(pady=(2, 10))
@@ -147,17 +153,17 @@ class VentanaAvisoActualizacion(ctk.CTkToplevel):
 
         fila_v_actual = ctk.CTkFrame(card, fg_color="transparent")
         fila_v_actual.pack(fill="x", padx=15, pady=(8, 2))
-        ctk.CTkLabel(fila_v_actual, text="Version instalada:", font=("Helvetica", 12)).pack(side="left")
+        ctk.CTkLabel(fila_v_actual, text="Versión instalada:", font=("Helvetica", 12)).pack(side="left")
         ctk.CTkLabel(fila_v_actual, text=f"v{VERSION_ACTUAL}", font=("Helvetica", 12, "bold"), text_color="gray50").pack(side="right")
 
         fila_v_nueva = ctk.CTkFrame(card, fg_color="transparent")
         fila_v_nueva.pack(fill="x", padx=15, pady=(2, 8))
-        ctk.CTkLabel(fila_v_nueva, text="Nueva version:", font=("Helvetica", 12)).pack(side="left")
+        ctk.CTkLabel(fila_v_nueva, text="Nueva versión:", font=("Helvetica", 12)).pack(side="left")
         ctk.CTkLabel(fila_v_nueva, text=f"v{self.version_remota}", font=("Helvetica", 13, "bold"), text_color=("#1976d2", "#42a5f5")).pack(side="right")
 
         lbl_sub = ctk.CTkLabel(
             container, 
-            text="La actualizacion se sobreescribira directamente en este archivo.",
+            text="¿Deseas ir a GitHub para descargar la última versión?",
             font=("Helvetica", 11),
             text_color=("gray40", "gray65")
         )
@@ -169,7 +175,7 @@ class VentanaAvisoActualizacion(ctk.CTkToplevel):
 
         btn_cancelar = ctk.CTkButton(
             btn_frame, 
-            text="Mas tarde", 
+            text="Más tarde", 
             width=110,
             fg_color="transparent",
             hover_color=("gray80", "gray25"),
@@ -187,213 +193,21 @@ class VentanaAvisoActualizacion(ctk.CTkToplevel):
             font=("Helvetica", 12, "bold"),
             fg_color="#2b7a78", 
             hover_color="#17252a",
-            command=self._iniciar_descarga
+            command=self._abrir_github
         )
         btn_actualizar.pack(side="right", fill="x", expand=True)
 
-    def _iniciar_descarga(self):
-        url = self.url_nuevo_exe
-        master = self.master
+    def _abrir_github(self):
+        webbrowser.open(self.url_destino)
         self.destroy()
-        VentanaDescarga(master, url)
 
-
-# --- VENTANA DE PROGRESO Y REEMPLAZO DIRECTO EN DISCO ---
-class VentanaDescarga(ctk.CTkToplevel):
-    def __init__(self, master, url_nuevo_exe):
-        super().__init__(master)
-        self.master = master
-        self.url_nuevo_exe = url_nuevo_exe
-        
-        self.title("Actualizando Facturador")
-        self.geometry("450x220")
-        self.resizable(False, False)
-        self.grab_set()
-
-        if os.path.exists(ICO_FILE):
-            try:
-                self.iconbitmap(ICO_FILE)
-            except Exception:
-                pass
-
-        self.update_idletasks()
-        x = master.winfo_x() + (master.winfo_width() // 2) - 225
-        y = master.winfo_y() + (master.winfo_height() // 2) - 110
-        self.geometry(f"+{max(0, x)}+{max(0, y)}")
-
-        container = ctk.CTkFrame(self, corner_radius=15, fg_color=("gray95", "gray14"))
-        container.pack(fill="both", expand=True, padx=15, pady=15)
-
-        self.lbl_estado = ctk.CTkLabel(
-            container, 
-            text="Conectando con el servidor...", 
-            font=("Helvetica", 14, "bold")
-        )
-        self.lbl_estado.pack(pady=(18, 12))
-
-        self.progress_bar = ctk.CTkProgressBar(container, width=370, height=12, corner_radius=6)
-        self.progress_bar.set(0)
-        self.progress_bar.pack(pady=6)
-
-        self.lbl_detalles = ctk.CTkLabel(
-            container, 
-            text="0.00 MB / 0.00 MB (0%)", 
-            font=("Helvetica", 11),
-            text_color=("gray40", "gray60")
-        )
-        self.lbl_detalles.pack(pady=(4, 10))
-
-        self.lbl_aviso = ctk.CTkLabel(
-            container,
-            text="Descargando el ejecutable actualizado...",
-            font=("Helvetica", 10),
-            text_color="gray50"
-        )
-        self.lbl_aviso.pack(pady=(0, 10))
-
-        self.protocol("WM_DELETE_WINDOW", lambda: None)
-        threading.Thread(target=self._descargar_hilo, daemon=True).start()
-
-    def _obtener_ruta_exe_real(self):
-        """Devuelve la ruta absoluta del .exe real (por ejemplo en el Escritorio), evitando carpetas temporales."""
-        ruta_encontrada = ""
-        
-        # 1. Intentar por Kernel32 GetModuleFileNameW (ruta nativa de proceso de Windows)
-        try:
-            import ctypes
-            buf = ctypes.create_unicode_buffer(1024)
-            ctypes.windll.kernel32.GetModuleFileNameW(0, buf, 1024)
-            if buf.value and os.path.exists(buf.value):
-                ruta_encontrada = os.path.normpath(buf.value)
-        except Exception:
-            pass
-
-        # 2. Si apunta a una carpeta temporal _MEI de PyInstaller o esta vacia, usar sys.argv[0]
-        if not ruta_encontrada or "_MEI" in ruta_encontrada:
-            if getattr(sys, 'frozen', False):
-                ruta_encontrada = os.path.normpath(os.path.abspath(sys.argv[0]))
-            else:
-                ruta_encontrada = os.path.normpath(os.path.abspath(__file__))
-
-        # 3. Comprobar sys.executable como ultimo recurso si no es temporal
-        if "_MEI" in ruta_encontrada:
-            posible_exe = os.path.normpath(sys.executable)
-            if "_MEI" not in posible_exe:
-                ruta_encontrada = posible_exe
-
-        return ruta_encontrada
-
-    def _descargar_hilo(self):
-        temp_dir = os.environ.get("TEMP", os.path.dirname(sys.executable))
-        ruta_temporal_exe = os.path.join(temp_dir, "facturador_update.exe")
-
-        try:
-            req = urllib.request.Request(
-                self.url_nuevo_exe,
-                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-            )
-
-            with urllib.request.urlopen(req, timeout=60, context=get_ssl_context()) as resp:
-                total_bytes = resp.getheader('Content-Length')
-                total_bytes = int(total_bytes) if total_bytes else None
-
-                descargados = 0
-                bloque_size = 1024 * 64
-                
-                with open(ruta_temporal_exe, 'wb') as f_out:
-                    while True:
-                        chunk = resp.read(bloque_size)
-                        if not chunk:
-                            break
-                        f_out.write(chunk)
-                        descargados += len(chunk)
-
-                        if total_bytes:
-                            porcentaje = descargados / total_bytes
-                            mb_actual = descargados / (1024 * 1024)
-                            mb_total = total_bytes / (1024 * 1024)
-                            texto_progreso = f"{mb_actual:.2f} MB / {mb_total:.2f} MB ({int(porcentaje * 100)}%)"
-                            self.after(0, self._actualizar_ui, porcentaje, texto_progreso)
-
-            tamano_mb = os.path.getsize(ruta_temporal_exe) / (1024 * 1024)
-            if tamano_mb < 3.0:
-                raise ValueError(f"Archivo incompleto o enlace incorrecto ({tamano_mb:.2f} MB).")
-
-            self.after(0, self._finalizar_y_reemplazar, ruta_temporal_exe)
-
-        except Exception as e:
-            if os.path.exists(ruta_temporal_exe):
-                try:
-                    os.remove(ruta_temporal_exe)
-                except Exception:
-                    pass
-            self.after(0, self._mostrar_error, str(e))
-
-    def _finalizar_y_reemplazar(self, ruta_temporal_exe):
-            self.lbl_estado.configure(text="Aplicando actualizacion...")
-            self.lbl_aviso.configure(text="Sobreescribiendo ejecutable y finalizando...")
-
-            ruta_exe_real = self._obtener_ruta_exe_real()
-            directorio_actual = os.path.dirname(ruta_exe_real)
-            pid_actual = os.getpid()
-
-            temp_dir = os.environ.get("TEMP", directorio_actual)
-            updater_bat = os.path.join(temp_dir, "reemplazar_update.bat")
-
-            # Script por lotes que:
-            # 1. Espera a que el proceso actual muera por PID para liberar el archivo .exe bloqueado
-            # 2. Copia y sobreescribe con /Y el .exe directamente en su ruta original
-            # 3. Elimina el archivo temporal de descarga
-            # 4. Muestra un cuadro de confirmacion nativo (Si/No) preguntando si desea abrir el programa
-            contenido_bat = (
-                "@echo off\r\n"
-                ":wait_proc\r\n"
-                f'tasklist /fi "PID eq {pid_actual}" 2>NUL | find /I "{pid_actual}" >NUL\r\n'
-                "if not errorlevel 1 (\r\n"
-                "    timeout /t 1 /nobreak >nul\r\n"
-                "    goto wait_proc\r\n"
-                ")\r\n"
-                "timeout /t 1 /nobreak >nul\r\n"
-                f'copy /y "{ruta_temporal_exe}" "{ruta_exe_real}" >nul\r\n'
-                f'del "{ruta_temporal_exe}" >nul 2>nul\r\n'
-                'mshta vbscript:Execute("resp=MsgBox(""La actualizacion se ha completado correctamente." & vbCrLf & ""¿Desea abrir el programa ahora?"", 36, ""Actualizacion completada""): If resp=6 Then CreateObject(""WScript.Shell"").Run """""'
-                f'{ruta_exe_real}'
-                '""""": End If: close")\r\n'
-                '(goto) 2>nul & del "%~f0"\r\n'
-            )
-
-            with open(updater_bat, "w", encoding="ascii", errors="ignore") as f:
-                f.write(contenido_bat)
-
-            # Lanzar el actualizador en segundo plano sin ventana de consola negra
-            subprocess.Popen(
-                ["cmd.exe", "/c", updater_bat],
-                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-                close_fds=True
-            )
-
-            self.master.destroy()
-            sys.exit(0)
-
-    def _actualizar_ui(self, porcentaje, texto):
-        self.progress_bar.set(porcentaje)
-        self.lbl_estado.configure(text="Descargando actualizacion...")
-        self.lbl_detalles.configure(text=texto)
-
-    def _mostrar_error(self, error_msg):
-        self.destroy()
-        messagebox.showerror(
-            "Fallo al actualizar", 
-            f"No se pudo completar la actualizacion:\n{error_msg}",
-            parent=self.master
-        )
 
 def comprobar_actualizacion(parent=None, manual=False):
     if not getattr(sys, 'frozen', False):
         if manual:
             messagebox.showinfo(
                 "Modo desarrollo", 
-                "Estas ejecutando el script .py. Las actualizaciones automaticas funcionan sobre la app instalada (.exe).",
+                "Estás ejecutando el script .py. Las comprobaciones automáticas se activan sobre la versión instalada.",
                 parent=parent
             )
         return
@@ -410,7 +224,6 @@ def comprobar_actualizacion(parent=None, manual=False):
             }
         )
 
-        # Conexion con contexto SSL permisivo
         with urllib.request.urlopen(req, timeout=10, context=get_ssl_context()) as response:
             data = json.loads(response.read().decode('utf-8'))
             version_remota = data.get("version", "").strip()
@@ -422,15 +235,15 @@ def comprobar_actualizacion(parent=None, manual=False):
             if manual:
                 messagebox.showinfo(
                     "Sin actualizaciones", 
-                    f"Ya tienes la version mas reciente (v{VERSION_ACTUAL}).",
+                    f"Ya tienes la versión más reciente (v{VERSION_ACTUAL}).",
                     parent=parent
                 )
 
     except Exception as e:
         if manual:
             messagebox.showerror(
-                "Error de conexion", 
-                f"No se pudo comprobar el estado de actualizacion:\n{e}",
+                "Error de conexión", 
+                f"No se pudo comprobar el estado de actualización:\n{e}",
                 parent=parent
             )
 
@@ -736,7 +549,7 @@ class GestionProductosModal(ctk.CTkToplevel):
     def guardar_producto(self):
         desc = self.ent_desc.get().strip()
         try:
-            precio = float(self.entry_precio.get().strip().replace(',', '.'))
+            precio = float(self.ent_precio.get().strip().replace(',', '.'))
             iva = int(self.ent_iva.get().strip())
             if not desc or precio < 0 or iva < 0:
                 raise ValueError
