@@ -16,7 +16,7 @@ if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
 
 # --- CONTROL DE VERSIONES Y ACTUALIZACIONES ---
-VERSION_ACTUAL = "1.0.1"
+VERSION_ACTUAL = "1.0.2"
 URL_VERSION_REMOTA = "https://raw.githubusercontent.com/ivaanjc/facturador-obrador/main/version.json"
 URL_RELEASES_GITHUB = "https://github.com/ivaanjc/facturador-obrador/releases/latest/download/facturador2026.exe"
 
@@ -307,6 +307,18 @@ class TicketPDF(FPDF):
         # 6. Filas de productos
         self.set_font("Helvetica", "", 8)
         for it in items:
+            # Control de salto preventivo antes de calcular coordenadas relativas
+            if self.get_y() > 200:
+                self.add_page()
+                self.set_font("Helvetica", "B", 8)
+                self.cell(26, 4.5, "Articulo", border='TB')
+                self.cell(10, 4.5, "Cant", border='TB', align='C')
+                self.cell(14, 4.5, "Precio", border='TB', align='R')
+                self.cell(8, 4.5, "IVA", border='TB', align='C')
+                self.cell(14, 4.5, "Total", border='TB', align='R')
+                self.ln(5.5)
+                self.set_font("Helvetica", "", 8)
+
             x_ini, y_ini = self.get_x(), self.get_y()
             self.multi_cell(26, 4, it['desc'])
             y_fin = self.get_y()
@@ -317,10 +329,15 @@ class TicketPDF(FPDF):
             self.cell(8, 4, f"{it['iva']}%", align='C')
             self.cell(14, 4, f"{it['total']:.2f}", align='R')
             self.set_y(max(y_fin, y_ini + 4.5))
+            self.set_x(4)
 
         self.ln(2)
         self.line(4, self.get_y(), 76, self.get_y())
         self.ln(2)
+
+        # Control de salto si el bloque de totales no cabe
+        if self.get_y() > 180:
+            self.add_page()
 
         # 7. Totales
         self.set_font("Helvetica", "", 9)
@@ -879,74 +896,74 @@ class FacturadorApp(ctk.CTk):
         self.refrescar_tabla()
 
     def generar_documento(self):
-            if not self.items_factura:
-                messagebox.showwarning("Atencion", "Añade al menos un producto a la lista.")
-                return
+        if not self.items_factura:
+            messagebox.showwarning("Atencion", "Añade al menos un producto a la lista.")
+            return
 
-            es_factura = self.var_es_factura.get()
-            emisor = self.txt_emisor.get("1.0", "end").strip()
-            nombre_cli = self.combo_clientes.get().strip()
-            cliente_obj = next((c for c in self.clientes if c["nombre"] == nombre_cli), {"nombre": nombre_cli})
+        es_factura = self.var_es_factura.get()
+        emisor = self.txt_emisor.get("1.0", "end").strip()
+        nombre_cli = self.combo_clientes.get().strip()
+        cliente_obj = next((c for c in self.clientes if c["nombre"] == nombre_cli), {"nombre": nombre_cli})
 
-            # Reiniciar contador automáticamente si ha cambiado de año
-            anio_actual = datetime.date.today().year
-            if self.config_data.get("anio") != anio_actual:
-                self.config_data["anio"] = anio_actual
-                self.config_data["ultimo_num"] = 0
-                guardar_json(CONFIG_FILE, self.config_data)
+        # Reiniciar contador automáticamente si ha cambiado de año
+        anio_actual = datetime.date.today().year
+        if self.config_data.get("anio") != anio_actual:
+            self.config_data["anio"] = anio_actual
+            self.config_data["ultimo_num"] = 0
+            guardar_json(CONFIG_FILE, self.config_data)
 
-            # Contador siguiente formateado (ej. 001)
-            contador_actual = self.config_data.get("ultimo_num", 0) + 1
-            contador_str = f"{contador_actual:03d}"
+        # Contador siguiente formateado (ej. 001)
+        contador_actual = self.config_data.get("ultimo_num", 0) + 1
+        contador_str = f"{contador_actual:03d}"
 
-            # Obtener el nombre del CLIENTE con '_' entre palabras
-            nombre_base = nombre_cli.split('(')[0].strip() if nombre_cli else "Cliente"
-            partes = [p for p in nombre_base.split() if p]
-            nombre_con_guiones = "_".join(partes)
-            nombre_cliente_formateado = "".join(c for c in nombre_con_guiones if c.isalnum() or c in ('_', '-')).strip()
-            if not nombre_cliente_formateado:
-                nombre_cliente_formateado = "Cliente"
+        # Obtener el nombre del CLIENTE con '_' entre palabras
+        nombre_base = nombre_cli.split('(')[0].strip() if nombre_cli else "Cliente"
+        partes = [p for p in nombre_base.split() if p]
+        nombre_con_guiones = "_".join(partes)
+        nombre_cliente_formateado = "".join(c for c in nombre_con_guiones if c.isalnum() or c in ('_', '-')).strip()
+        if not nombre_cliente_formateado:
+            nombre_cliente_formateado = "Cliente"
+
+        if es_factura:
+            num_doc = f"{anio_actual}/{contador_str}"
+            nombre_salida = f"Factura_{nombre_cliente_formateado}_{anio_actual}_{contador_str}.pdf"
+        else:
+            num_doc = datetime.datetime.now().strftime("%H%M%S")
+            nombre_salida = f"Ticket_{nombre_cliente_formateado}_{anio_actual}_{num_doc}.pdf"
+
+        base_total = sum(i["subtotal"] for i in self.items_factura)
+        iva_total = sum(i["subtotal"] * (i["iva"] / 100) for i in self.items_factura)
+        total_final = base_total + iva_total
+
+        iva_grupos = {}
+        for it in self.items_factura:
+            iva_grupos[it["iva"]] = iva_grupos.get(it["iva"], 0) + it["subtotal"]
+
+        ruta_salida = os.path.join(BASE_DIR, nombre_salida)
+
+        try:
+            pdf = TicketPDF()
+            pdf.generar(es_factura, num_doc, emisor, cliente_obj, self.items_factura,
+                        base_total, iva_total, total_final, iva_grupos, ruta_salida)
 
             if es_factura:
-                num_doc = f"{anio_actual}/{contador_str}"
-                nombre_salida = f"Factura_{nombre_cliente_formateado}_{anio_actual}_{contador_str}.pdf"
-            else:
-                num_doc = datetime.datetime.now().strftime("%H%M%S")
-                nombre_salida = f"Ticket_{nombre_cliente_formateado}_{anio_actual}_{num_doc}.pdf"
+                self.config_data["ultimo_num"] = contador_actual
+                guardar_json(CONFIG_FILE, self.config_data)
+                self.lbl_num_doc.configure(text=f"Documento actual: {self.get_num_factura()}")
 
-            base_total = sum(i["subtotal"] for i in self.items_factura)
-            iva_total = sum(i["subtotal"] * (i["iva"] / 100) for i in self.items_factura)
-            total_final = base_total + iva_total
-
-            iva_grupos = {}
-            for it in self.items_factura:
-                iva_grupos[it["iva"]] = iva_grupos.get(it["iva"], 0) + it["subtotal"]
-
-            ruta_salida = os.path.join(BASE_DIR, nombre_salida)
-
-            try:
-                pdf = TicketPDF()
-                pdf.generar(es_factura, num_doc, emisor, cliente_obj, self.items_factura,
-                            base_total, iva_total, total_final, iva_grupos, ruta_salida)
-
-                if es_factura:
-                    self.config_data["ultimo_num"] = contador_actual
-                    guardar_json(CONFIG_FILE, self.config_data)
-                    self.lbl_num_doc.configure(text=f"Documento actual: {self.get_num_factura()}")
-
-                self.limpiar_items()
-                messagebox.showinfo("Exito", f"Documento generado: {nombre_salida}")
-                
-                if sys.platform == "win32":
-                    os.startfile(ruta_salida)
-                elif sys.platform.startswith("linux"):
-                    import subprocess
-                    subprocess.call(["xdg-open", ruta_salida])
-                elif sys.platform.darwin:
-                    import subprocess
-                    subprocess.call(["open", ruta_salida])
-            except Exception as e:
-                messagebox.showerror("Error", f"No se pudo generar el PDF: {e}")
+            self.limpiar_items()
+            messagebox.showinfo("Exito", f"Documento generado: {nombre_salida}")
+            
+            if sys.platform == "win32":
+                os.startfile(ruta_salida)
+            elif sys.platform.startswith("linux"):
+                import subprocess
+                subprocess.call(["xdg-open", ruta_salida])
+            elif sys.platform.darwin:
+                import subprocess
+                subprocess.call(["open", ruta_salida])
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo generar el PDF: {e}")
 
 
 if __name__ == "__main__":

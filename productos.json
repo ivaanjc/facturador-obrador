@@ -18,5 +18,105 @@
         "desc": "Holaaaa",
         "precio": 10.0,
         "iva": 8
+    },
+    {
+        "desc": "Café con Leche",
+        "precio": 1.60,
+        "iva": 10
+    },
+    {
+        "desc": "Croissant de Mantequilla",
+        "precio": 1.80,
+        "iva": 10
+    },
+    {
+        "desc": "Tarta de Manzana Casera",
+        "precio": 4.50,
+        "iva": 10
+    },
+    {
+        "desc": "Bocadillo de Jamón Ibérico",
+        "precio": 5.50,
+        "iva": 10
+    },
+    {
+        "desc": "Zumo Natural de Naranja",
+        "precio": 2.80,
+        "iva": 10
+    },
+    {
+        "desc": "Agua Mineral 500ml",
+        "precio": 1.20,
+        "iva": 10
+    },
+    {
+        "desc": "Refresco Cola 330ml",
+        "precio": 2.20,
+        "iva": 21
+    },
+    {
+        "desc": "Hogaza de Pan Rústico",
+        "precio": 2.40,
+        "iva": 4
+    },
+    {
+        "desc": "Pack 6 Magdalenas Caseras",
+        "precio": 3.60,
+        "iva": 10
+    },
+    {
+        "desc": "Empanada de Atún (porción)",
+        "precio": 3.80,
+        "iva": 10
+    },
+    {
+        "desc": "Galletas de Mantequilla (250g)",
+        "precio": 4.20,
+        "iva": 10
+    },
+    {
+        "desc": "Caja de Bombones Artesanos",
+        "precio": 14.50,
+        "iva": 21
+    },
+    {
+        "desc": "Té Verde con Menta",
+        "precio": 1.90,
+        "iva": 10
+    },
+    {
+        "desc": "Bizcocho de Limón y Yogur",
+        "precio": 3.20,
+        "iva": 10
+    },
+    {
+        "desc": "Palmera de Chocolate",
+        "precio": 2.10,
+        "iva": 10
+    },
+    {
+        "desc": "Bolsa de Tela Reutilizable",
+        "precio": 3.00,
+        "iva": 21
+    },
+    {
+        "desc": "Pack Velas de Cumpleaños",
+        "precio": 1.50,
+        "iva": 21
+    },
+    {
+        "desc": "Servicio de Entrega a Domicilio",
+        "precio": 6.00,
+        "iva": 21
+    },
+    {
+        "desc": "Tarta Personalizada (kg)",
+        "precio": 22.00,
+        "iva": 10
+    },
+    {
+        "desc": "Leche Entera 1L",
+        "precio": 1.15,
+        "iva": 4
     }
 ]
